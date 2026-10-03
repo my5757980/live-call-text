@@ -1,0 +1,22 @@
+{
+  "name": "live-call-text",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Live text of laptop calls for agents (WhatsApp Web, WhatsApp Desktop, installed VoIP dialer).",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "wrangler dev --port 8787",
+    "deploy": "wrangler deploy",
+    "test:unit": "node --test \"tests/unit/*.test.js\"",
+    "test:relay": "node --test --test-concurrency=1 \"tests/relay/*.test.js\"",
+    "test:e2e": "playwright test",
+    "test": "npm run test:unit && npm run test:relay && npm run test:e2e"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "wrangler": "^4.147.0"
+  }
+}

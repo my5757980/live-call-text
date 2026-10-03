@@ -1,0 +1,17 @@
+{
+  // Live Call Text: static pages from web/ (Workers Static Assets, free and unlimited)
+  // plus the customer-link relay (one hub Durable Object). See research.md R6 and R8.
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "live-call-text",
+  "main": "relay/src/index.js",
+  "compatibility_date": "2026-09-01",
+  "assets": {
+    "directory": "./web",
+    "binding": "ASSETS"
+  },
+  "durable_objects": {
+    "bindings": [{ "name": "HUB", "class_name": "Hub" }]
+  },
+  // The Free plan only allows SQLite-backed Durable Objects; the hub never writes a row.
+  "migrations": [{ "tag": "v1", "new_sqlite_classes": ["Hub"] }]
+}

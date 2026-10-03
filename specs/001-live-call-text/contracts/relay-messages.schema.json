@@ -1,0 +1,71 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://live-call-text.local/contracts/relay-messages.schema.json",
+  "title": "Live Call Text relay messages (protocol lct1)",
+  "description": "JSON text frames on the relay WebSocket. Heartbeats are the plain text frames 'ping' and 'pong' and are not covered here.",
+  "$defs": {
+    "lang": {
+      "type": "string",
+      "enum": ["ur-PK", "en-US"]
+    },
+    "caption": {
+      "type": "object",
+      "description": "Agent words. Interim updates reuse the same id; the final version has final=true.",
+      "properties": {
+        "t": { "const": "caption" },
+        "id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^[A-Za-z0-9:_-]+$"
+        },
+        "text": { "type": "string", "minLength": 1, "maxLength": 500 },
+        "final": { "type": "boolean" },
+        "lang": { "$ref": "#/$defs/lang" }
+      },
+      "required": ["t", "id", "text", "final", "lang"],
+      "additionalProperties": false
+    },
+    "end": {
+      "type": "object",
+      "description": "Sent by the agent page on Stop or pagehide.",
+      "properties": {
+        "t": { "const": "end" }
+      },
+      "required": ["t"],
+      "additionalProperties": false
+    },
+    "status": {
+      "type": "object",
+      "description": "Sent by the relay to viewers (and 'live' to the agent after it connects).",
+      "properties": {
+        "t": { "const": "status" },
+        "state": {
+          "type": "string",
+          "enum": ["live", "paused", "ended", "expired", "invalid"]
+        }
+      },
+      "required": ["t", "state"],
+      "additionalProperties": false
+    },
+    "agentToRelay": {
+      "oneOf": [
+        { "$ref": "#/$defs/caption" },
+        { "$ref": "#/$defs/end" }
+      ]
+    },
+    "relayToViewer": {
+      "oneOf": [
+        { "$ref": "#/$defs/caption" },
+        { "$ref": "#/$defs/status" }
+      ]
+    },
+    "relayToAgent": {
+      "$ref": "#/$defs/status"
+    }
+  },
+  "anyOf": [
+    { "$ref": "#/$defs/agentToRelay" },
+    { "$ref": "#/$defs/relayToViewer" }
+  ]
+}

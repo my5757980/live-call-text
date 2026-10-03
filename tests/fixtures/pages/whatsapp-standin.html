@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>WhatsApp</title>
+<h1>WhatsApp (test stand-in)</h1>
+<p>Plays a recorded customer clip, standing in for a WhatsApp Web call tab.</p>
+<audio id="a" preload="auto"></audio>
+<script>
+  const a = document.getElementById('a');
+  const setClip = (name) => { a.src = '/__test/audio/' + name + '.mp3'; };
+  setClip(new URLSearchParams(location.search).get('clip') || 'en');
+
+  // Chrome delays autoplay in background tabs, so tests start playback explicitly.
+  window.playClip = async (name) => {
+    if (name) setClip(name);
+    a.currentTime = 0;
+    await a.play();
+    return window.clipState();
+  };
+  window.clipState = () => ({
+    paused: a.paused, muted: a.muted, volume: a.volume, ended: a.ended,
+    t: a.currentTime, duration: a.duration,
+  });
+</script>
+</html>

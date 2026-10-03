@@ -1,0 +1,136 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <title>Live Call Text</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'%3E%3Crect width='36' height='36' rx='10' fill='%232453d6'/%3E%3Cpath d='M10 10h16a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3h-9l-5 4v-4h-2a3 3 0 0 1-3-3v-8a3 3 0 0 1 3-3z' fill='%23fff'/%3E%3Cpath d='M14 15v4M18 13.5v7M22 15v4' stroke='%232453d6' stroke-width='2' stroke-linecap='round'/%3E%3C/svg%3E">
+  <link rel="stylesheet" href="css/app.css">
+</head>
+<body class="agent-page">
+  <div class="app">
+
+    <header class="app-bar">
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 36 36" aria-hidden="true">
+          <rect width="36" height="36" rx="10" fill="#2453d6"/>
+          <path d="M10 10h16a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3h-9l-5 4v-4h-2a3 3 0 0 1-3-3v-8a3 3 0 0 1 3-3z" fill="#fff"/>
+          <path d="M14 15v4M18 13.5v7M22 15v4" stroke="#2453d6" stroke-width="2" stroke-linecap="round"/>
+        </svg>
+        <div>
+          <h1>Live Call Text</h1>
+          <p class="tagline">Live captions for WhatsApp and dialer calls</p>
+        </div>
+      </div>
+      <span class="status-chip" data-testid="status" data-state="ready" role="status">Ready</span>
+    </header>
+
+    <section class="card controls" aria-label="Call controls">
+      <div class="field">
+        <label for="customer-lang">Customer speaks</label>
+        <select data-testid="customer-lang" id="customer-lang">
+          <option value="en-US">English</option>
+          <option value="ur-PK">Urdu</option>
+        </select>
+      </div>
+      <div class="field">
+        <label for="agent-lang">I speak</label>
+        <select data-testid="agent-lang" id="agent-lang">
+          <option value="en-US">English</option>
+          <option value="ur-PK">Urdu</option>
+        </select>
+      </div>
+      <div class="actions">
+        <button type="button" class="btn btn-primary btn-lg" data-testid="start" id="start">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l11-6.5z" fill="currentColor"/></svg>
+          Start
+        </button>
+        <button type="button" class="btn btn-danger btn-lg" data-testid="stop" id="stop" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="6.5" width="11" height="11" rx="2" fill="currentColor"/></svg>
+          Stop
+        </button>
+      </div>
+
+      <div class="meters" aria-label="Sound levels">
+        <div class="meter">
+          <span class="meter-label">Call sound</span>
+          <div class="meter-track" data-testid="meter-call" data-level="0"><span class="meter-fill"></span></div>
+        </div>
+        <div class="meter">
+          <span class="meter-label">My microphone</span>
+          <div class="meter-track" data-testid="meter-mic" data-level="0" data-state="off"><span class="meter-fill"></span></div>
+        </div>
+      </div>
+
+      <div class="note">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 14v-2a8 8 0 0 1 16 0v2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="3" y="13" width="5" height="7" rx="2" fill="currentColor"/><rect x="16" y="13" width="5" height="7" rx="2" fill="currentColor"/></svg>
+        <p data-testid="headset-reminder">Use a headset, so the customer's voice doesn't reach your microphone.</p>
+      </div>
+    </section>
+
+    <div class="banner" data-testid="message" role="alert" hidden></div>
+    <div class="banner banner-hint" data-testid="hint" hidden></div>
+
+    <section class="card conversation" aria-label="Conversation">
+      <div class="card-head">
+        <h2>Conversation</h2>
+        <div class="head-actions">
+          <span class="legend" aria-hidden="true"><i class="key-customer"></i>Customer <i class="key-agent"></i>Agent</span>
+          <button type="button" class="btn btn-sm btn-secondary" data-testid="save-chat" id="save-chat" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span class="label">Save chat</span>
+          </button>
+          <button type="button" class="btn btn-sm btn-secondary" data-testid="new-call" id="new-call" disabled>
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            New call
+          </button>
+        </div>
+      </div>
+      <div class="transcript" data-testid="transcript" role="log" aria-live="polite">
+        <div class="empty-state">
+          <svg viewBox="0 0 48 48" aria-hidden="true"><path d="M10 9h28a5 5 0 0 1 5 5v14a5 5 0 0 1-5 5H22l-8 6v-6h-4a5 5 0 0 1-5-5V14a5 5 0 0 1 5-5z" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linejoin="round"/><path d="M17 18v6M24 15.5v11M31 18v6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+          <p class="empty-title">No call yet</p>
+          <p>Press <strong>Start</strong>, then choose the call: the <strong>WhatsApp tab</strong>, or <strong>Entire screen</strong> with <strong>Also share system audio</strong> for the WhatsApp app or your dialer.</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card link-card" aria-label="Customer link">
+      <div class="link-info">
+        <h2>Customer link <span class="badge">Optional</span></h2>
+        <p class="muted">Paste it in the chat so the customer can read your words live.</p>
+        <span class="link-status" data-testid="link-status" data-state="off"></span>
+      </div>
+      <button type="button" class="btn btn-secondary" data-testid="copy-link" id="copy-link" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        Copy customer link
+      </button>
+    </section>
+
+    <footer class="app-foot">
+      <div class="note">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3" fill="none" stroke="currentColor" stroke-width="2"/></svg>
+        <p data-testid="privacy-line">Speech is sent to Google through Chrome to turn it into text. Nothing is recorded.</p>
+      </div>
+      <a class="help-link" data-testid="help-link" href="guide.html" target="_blank" rel="noopener">
+        Help guide (Roman Urdu)
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 5h5v5M19 5l-8 8M18 14v4a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      </a>
+    </footer>
+
+  </div>
+
+  <dialog class="dialog" data-testid="unsaved-dialog" aria-labelledby="unsaved-title">
+    <h2 id="unsaved-title">Save this call first?</h2>
+    <p>The chat of this call is not saved yet. Save it to keep a record, or continue without saving.</p>
+    <div class="dialog-actions">
+      <button type="button" class="btn btn-ghost" data-testid="dialog-cancel">Cancel</button>
+      <button type="button" class="btn btn-secondary" data-testid="dialog-discard">Don't save</button>
+      <button type="button" class="btn btn-primary" data-testid="dialog-save">Save and continue</button>
+    </div>
+  </dialog>
+
+  <script type="module" src="js/agent.js"></script>
+</body>
+</html>
