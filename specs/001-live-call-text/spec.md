@@ -348,6 +348,20 @@ call without saving and check that the page asks first.
     for the customer page;
   - body text contrast of at least 4.5:1.
 
+  *Amended 2026-11-20 (owner: "1oo% responsive bhii hona chiyaa chooti sayy chootji screen
+  sayy barii sayy barii screen taak")*: every page MUST work on screens from 320 px wide phones
+  to 4K monitors, in portrait and landscape:
+  - nothing sticks out sideways, on any page, at any of those sizes;
+  - the agent's conversation keeps at least 220 px of height, and the customer's text at
+    least half of a short landscape screen (240 px on taller screens);
+  - on a common laptop (1366 × 768) Start, Copy customer link and the whole conversation are
+    in view without scrolling, even with two messages showing;
+  - on wide screens (960 px and wider) the controls form a left column and the conversation
+    fills the right column; on narrower screens they stack, with the customer link after the
+    conversation;
+  - big monitors get bigger caption text (at least 26 px on the agent page and 30 px on the
+    customer page at 2560 × 1440).
+
 ### Verification Requirements
 
 - **VR-001**: Each user story MUST have automated checks that use recorded Urdu and English speech,

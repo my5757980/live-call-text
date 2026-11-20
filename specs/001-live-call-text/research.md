@@ -172,6 +172,8 @@ docs fetched on 2026-10-03 (sources at the end), and recorded-audio tests run on
     same words (Finding 9).
   - A new session starts in a microtask, not on a timer, so a hidden page (timers once a second)
     leaves no gap.
+  - A session aborted before its `start` is replaced at once: Chrome sends no `end` for it, and
+    waiting for the watchdog pushed recovery after a network drop to almost 5 s (Finding 13).
 
 ## R6. Customer-link relay and hosting
 

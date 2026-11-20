@@ -17,6 +17,7 @@ export function createLaneRunner({ side, track, lang, onResult, onState, onDebug
   let endWatchdog = null;
   let stopped = false;
   let restartAfterEnd = false;   // we aborted on purpose and want a fresh start
+  let sessionStarted = false;    // the current session has fired `start`
   let flushPending = null;       // turns the current session's unfinished text into a final line
 
   const report = (message) => onState?.({ side, ...lane, message });
@@ -38,7 +39,19 @@ export function createLaneRunner({ side, track, lang, onResult, onState, onDebug
   // final) and starts a new one as soon as `end` arrives, or after the watchdog.
   function endForRestart(method) {
     const rec = recognition;
-    debug('endForRestart', { method });
+    debug('endForRestart', { method, started: sessionStarted });
+    // Chrome sends no `end` for a session aborted before its `start` (test-log Finding 4):
+    // replace it at once instead of waiting for the watchdog.
+    if (!sessionStarted) {
+      try { rec.abort(); } catch { /* already ending */ }
+      clearTimeout(endWatchdog);
+      flushPending?.();
+      running = false;
+      restartAfterEnd = false;
+      recognition = null;          // late events from the old session are ignored
+      startSoon();
+      return;
+    }
     restartAfterEnd = true;
     try { rec[method](); } catch { /* already ending */ }
     clearTimeout(endWatchdog);
@@ -90,6 +103,7 @@ export function createLaneRunner({ side, track, lang, onResult, onState, onDebug
     rec.interimResults = true;
     rec.maxAlternatives = 1;
     const mySession = ++session;
+    sessionStarted = false;
     const startedAt = Date.now();
     let gotResult = false;
     // Chrome sometimes ends a session (our stop(), a silent failure) without sending a
@@ -117,6 +131,7 @@ export function createLaneRunner({ side, track, lang, onResult, onState, onDebug
     rec.onstart = () => {
       debug('onstart', { mine: recognition === rec });
       if (recognition !== rec) return;
+      sessionStarted = true;
       apply({ type: 'started' });
       healthyTimer = setTimeout(sendHealthy, HEALTHY_AFTER_MS);
     };

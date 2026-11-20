@@ -97,6 +97,14 @@ Every automated and manual run is recorded here exactly as it happened, failures
 | 2026-11-20 | Finding 12 | event log of 4 echo runs (temporary script) | 157 | - | - | Nothing was sent in those 4 runs, so the cause was worked out from the code (Finding 12) |
 | 2026-11-20 | Finding 12 fix | `echo.spec.js --repeat-each=5` | 157 | 10 | 0 | Both echo tests. The repeat-back test now also checks the customer link: 3 of 3 |
 | 2026-11-20 | T107 | `npx playwright test --retries=0` (all e2e) | 157 | 44 | 0 | Plus 2 skipped (soak opt-in, visibility fixme). Final run of this round: unit 180, relay 13, e2e 44, soak 10 min passed |
+| 2026-11-20 | T108 | responsive audit (temporary script): 3 pages x 19 sizes, 320 x 568 to 3840 x 2160 | 157 | - | - | Nothing stuck out sideways anywhere. The agent conversation was squeezed to 137-179 px on phones, phones held sideways, 640 x 900, 1024 x 768, 1280 x 720 and 1366 x 657 (the page then grew to 811 px); the customer text was 94-194 px on phones held sideways |
+| 2026-11-20 | T108 (red) | `tests/e2e/responsive.spec.js` | 157 | 5 | 13 | Expected: conversation and customer text below the new minimums, no big-screen text sizes |
+| 2026-11-20 | T109 | same | 157 | 18 | 0 | First green run had the messages in the left column, which pushed Copy customer link out of view at 1366 x 657 when both messages showed. The messages were moved above the conversation; the laptop check was then rewritten before the next run: with both messages, Start, Copy customer link and the conversation all in view and the conversation at least 300 px (it had asked for 380 px with the old placement); with no message at least 420 px |
+| 2026-11-20 | T110 | `npx playwright test --retries=0` (all e2e) | 157 | 61 | 1 | Plus 2 skipped. Failed: us1-errors "going offline ... resumes within 5 s". Then 2 of 3 repeats passed. See Finding 13 |
+| 2026-11-20 | Finding 13 | event log of 5 offline rounds (temporary script) | 157 | - | - | "No internet" cleared 4.7-4.9 s after the network came back: the session being replaced had not fired `start`, so the runner waited 1.5 s for an `end` that never comes, then 3 s for `healthy` |
+| 2026-11-20 | Finding 13 (red, then green) | recognizer unit tests, then `npm run test:unit` | n/a | 15 / 182 | 2 / 0 | |
+| 2026-11-20 | Finding 13 fix | offline e2e `--repeat-each=3`; the 5-round event log again | 157 | 3 | 0 | Cleared 3.1-3.3 s after the network came back |
+| 2026-11-20 | T110 | `npx playwright test --retries=0` (all e2e) | 157 | 62 | 0 | Plus 2 skipped. Unit 182 |
 
 ## Findings
 
@@ -219,6 +227,14 @@ Every automated and manual run is recorded here exactly as it happened, failures
       or more, or customer speech within 4 s when there is too little agent speech to judge)
       counts as a possible echo. Its in-progress words are not sent, and its final line is
       checked again after 2 s, against everything the customer has said by then.
+
+13. **Recovery after a network drop could take almost 5 s (2026-11-20). Fixed.**
+    - When the network came back right after Start, the session being replaced had not fired
+      `start` yet. Chrome sends no `end` for such a session (Finding 4), so the runner waited
+      for its 1.5 s watchdog before starting a new session, and then 3 s more for `healthy`:
+      4.7-4.9 s, against the 5 s of SC-005.
+    - **Fix**: a session that has not started is replaced at once. Recovery now takes about
+      3.2 s. The same fix makes a language change right after Start immediate.
 
 ## Manual checks
 

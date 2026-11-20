@@ -118,21 +118,51 @@ test('a language change aborts the session and starts a new one in the new langu
   assert.equal(sessions[1].lang, 'ur-PK');
 });
 
-// test-log Finding 4: Chrome may never fire `end` after an early abort.
-test('if Chrome never ends an aborted session, the runner replaces it after 1.5 s', async (t) => {
+// test-log Finding 4: Chrome does not fire `end` after aborting a session that has not
+// fired `start` yet. Waiting for it cost 1.5 s, which pushed recovery after a network drop
+// close to the 5 s limit (SC-005, test-log 2026-11-20): such a session is replaced at once.
+test('a session aborted before it started is replaced at once, without waiting for its end', async (t) => {
+  const { runner, sessions, results } = await setup(t);
+  const old = sessions[0];
+  runner.setLang('ur-PK');                         // before the session fired `start`
+  assert.deepEqual(old.calls, ['start', 'abort']);
+  await settle();
+  assert.equal(sessions.length, 2);
+  assert.equal(sessions[1].lang, 'ur-PK');
+  old.fireResult([result('late words', false)]);   // the old session is ignored from now on
+  old.fireEnd();
+  await settle();
+  assert.deepEqual(results, []);
+  assert.equal(sessions.length, 2);
+});
+
+test('if Chrome never ends a started session that was aborted, the runner replaces it after 1.5 s', async (t) => {
   const { runner, sessions, results, tick } = await setup(t);
   const old = sessions[0];
-  runner.setLang('ur-PK');                         // before the session even fired `start`
+  old.fireStart();
+  runner.setLang('ur-PK');
   await tick(1499);
   assert.equal(sessions.length, 1);
   await tick(1);
   assert.equal(sessions.length, 2);
   assert.equal(sessions[1].lang, 'ur-PK');
-  old.fireResult([result('late words', false)]);   // the old session is ignored from now on
+  old.fireResult([result('late words', false)]);
   old.fireEnd();
   await tick(5000);
   assert.deepEqual(results, []);
   assert.equal(sessions.length, 2);
+});
+
+test('coming back online right after Start is resolved within about 3 s', async (t) => {
+  const { sessions, states, tick, emit } = await setup(t);
+  emit('offline');                                 // before the first session fired `start`
+  assert.deepEqual(last(states), ['paused', 'no-internet', 'W_NO_INTERNET']);
+  emit('online');
+  await settle();
+  assert.equal(sessions.length, 2);                // replaced at once
+  sessions[1].fireStart();
+  await tick(3000);                                // 3 s without an error proves it healthy
+  assert.deepEqual(last(states), ['listening', null, null]);
 });
 
 test('restartNow replaces a session that has gone quiet', async (t) => {

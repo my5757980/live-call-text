@@ -118,6 +118,7 @@ svg { flex: none; }
 
 .card-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -312,37 +313,56 @@ select:hover { border-color: var(--muted); }
 
 /* ---------- Agent page layout ---------- */
 
+/* One column: the page grows with its content and the conversation takes the space that is
+   left, but never less than 300 px. Wide screens get two columns (end of this part). */
 .agent-page .app {
   display: flex;
   flex-direction: column;
   gap: 12px;
   max-width: 1040px;
-  height: 100vh;
-  height: 100dvh;
+  min-height: 100vh;
+  min-height: 100dvh;
   margin: 0 auto;
   padding: 16px;
 }
+/* Wide screens: the controls and customer link form the left column, and the messages sit
+   above the conversation on the right. In one column they all flow in page order, with the
+   customer link after the conversation. */
+.side, .main { display: contents; }
+.agent-page .link-card { order: 1; }
+.agent-page .app-foot { order: 2; }
+.alerts { display: flex; flex-direction: column; gap: 12px; }
+.alerts:not(:has(> :not([hidden]))) { display: none; }
 
 .app-bar {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  gap: 8px 12px;
   padding: 2px 4px;
 }
+.app-bar .brand h1 { white-space: nowrap; }
+.app-bar .status-chip { max-width: 100%; white-space: normal; }
 
 .controls {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
   align-items: end;
-  gap: 14px 16px;
-  padding: 16px;
+  gap: 12px 16px;
+  padding: 14px 16px;
 }
-.controls .meters,
-.controls .note { grid-column: 1 / -1; }
+.controls-foot {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 24px;
+}
 .actions { display: flex; }
 
-.meters { display: flex; flex-wrap: wrap; gap: 10px 28px; }
+.meters { display: flex; flex-wrap: wrap; gap: 8px 28px; }
 .meter { display: flex; align-items: center; gap: 10px; color: var(--muted); font-size: 13px; }
 .meter-track {
   position: relative;
@@ -369,9 +389,9 @@ select:hover { border-color: var(--muted); }
 /* Conversation */
 .conversation {
   display: flex;
-  flex: 1;
+  flex: 1 1 0;
   flex-direction: column;
-  min-height: 240px;
+  min-height: 300px;
   overflow: hidden;
 }
 .head-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
@@ -515,15 +535,98 @@ select:hover { border-color: var(--muted); }
 
 @media (max-width: 720px) {
   .agent-page .app { padding: 12px; }
-  .controls { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
-  .actions { grid-column: 1 / -1; }
-  .actions .btn { width: 100%; }
   .line { max-width: 92%; }
 }
 
+/* Phones: the Start button gets its own row, and the conversation a tall box. */
+@media (max-width: 560px) {
+  .controls { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .actions { grid-column: 1 / -1; }
+  .actions .btn { width: 100%; }
+  .agent-page .tagline { display: none; }
+  .conversation { min-height: max(340px, 62dvh); }
+}
 @media (max-width: 480px) {
+  .legend { display: none; }
+}
+@media (max-width: 340px) {
   .controls { grid-template-columns: minmax(0, 1fr); }
-  .tagline, .legend { display: none; }
+}
+/* Touch screens: small buttons are easier to hit. */
+@media (pointer: coarse) {
+  .btn-sm { height: 40px; }
+}
+
+/* Wide screens (laptops, tablets held sideways, monitors): the controls on the left, and the
+   conversation over the full height on the right, so both are in view without scrolling. */
+@media (min-width: 960px) {
+  .agent-page .app {
+    display: grid;
+    grid-template-columns: minmax(320px, 400px) minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    grid-template-areas: "bar bar" "side main" "foot foot";
+    gap: 12px 16px;
+    max-width: 1680px;
+    height: 100vh;
+    height: 100dvh;
+    min-height: 460px;
+  }
+  .agent-page .app-bar { grid-area: bar; }
+  .agent-page .app-foot { grid-area: foot; order: 0; }
+  .main { grid-area: main; display: flex; flex-direction: column; gap: 12px; min-height: 0; }
+  .alerts { gap: 8px; }
+  .alerts .banner { padding: 9px 14px; font-size: 14px; }
+  .agent-page .conversation { min-height: 0; }
+  .side {
+    grid-area: side;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    min-height: 0;
+    overflow-y: auto;
+    /* room for the cards' shadows inside the scroll box */
+    margin: -4px -6px -8px;
+    padding: 4px 6px 8px;
+  }
+  .agent-page .link-card { order: 0; flex-direction: column; align-items: stretch; }
+  .agent-page .link-card .btn { width: 100%; }
+  .link-info { flex: none; }
+  .controls { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .actions { grid-column: 1 / -1; }
+  .actions .btn { width: 100%; }
+  .controls-foot { flex-direction: column; align-items: stretch; gap: 10px; }
+  .meters { flex-direction: column; gap: 8px; }
+  .meter { justify-content: space-between; }
+  .meter-track { flex: 1; width: auto; max-width: 220px; }
+}
+
+/* Big monitors: more room and bigger text. */
+@media (min-width: 1800px) and (min-height: 900px) {
+  .agent-page { font-size: 17px; }
+  .agent-page .app { grid-template-columns: minmax(380px, 460px) minmax(0, 1fr); max-width: 2000px; padding: 24px; }
+  .agent-page .brand h1 { font-size: 21px; }
+  .agent-page .status-chip { font-size: 15px; }
+  .agent-page .banner { font-size: 16px; }
+  .line { max-width: min(85%, 860px); font-size: 26px; }
+  .line .who { font-size: 13px; }
+}
+@media (min-width: 2400px) and (min-height: 1200px) {
+  .agent-page { font-size: 19px; }
+  .agent-page .app { grid-template-columns: minmax(440px, 540px) minmax(0, 1fr); max-width: 2600px; padding: 32px; gap: 16px 24px; }
+  .agent-page .brand-mark { width: 46px; height: 46px; }
+  .agent-page .brand h1 { font-size: 25px; }
+  .agent-page .tagline { font-size: 15px; }
+  .agent-page .status-chip { font-size: 17px; padding: 8px 18px; }
+  .agent-page .field label { font-size: 15px; }
+  .agent-page select { height: 52px; font-size: 18px; }
+  .agent-page .btn-lg { height: 60px; font-size: 20px; }
+  .agent-page .btn-sm { height: 40px; font-size: 16px; }
+  .agent-page .banner { font-size: 18px; }
+  .agent-page .card-head h2, .agent-page .link-info h2 { font-size: 18px; }
+  .agent-page .note, .agent-page .meter, .agent-page .legend, .agent-page .link-status { font-size: 15px; }
+  .line { max-width: min(85%, 980px); font-size: 30px; }
+  .line .who { font-size: 14px; }
+  .call-time { font-size: 14px; }
 }
 
 /* ---------- Guide (document) pages ---------- */
@@ -563,3 +666,25 @@ select:hover { border-color: var(--muted); }
 .doc th { color: var(--muted); font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; }
 .doc code { padding: 1px 6px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--border); font-family: var(--font-mono); font-size: 13px; }
 .doc .urdu { font-family: var(--font-urdu); direction: rtl; line-height: 2; }
+
+@media (max-width: 480px) {
+  .doc-header { align-items: flex-start; }
+  .doc-header .brand-mark { width: 32px; height: 32px; margin-top: 2px; }
+  .doc-page .doc { padding: 16px 12px 40px; }
+  .doc section.card { padding: 14px; }
+  .doc h1 { font-size: 22px; }
+  .doc th, .doc td { padding: 8px 6px; }
+}
+@media (min-width: 1600px) {
+  .doc-page .doc { max-width: 1000px; }
+  .doc h1 { font-size: 32px; }
+  .doc .lead, .doc p, .doc li { font-size: 18px; }
+  .doc h2 { font-size: 21px; }
+  .doc table { font-size: 17px; }
+}
+@media (min-width: 2400px) {
+  .doc-page .doc { max-width: 1240px; }
+  .doc .lead, .doc p, .doc li { font-size: 21px; }
+  .doc h2 { font-size: 24px; }
+  .doc table { font-size: 19px; }
+}

@@ -533,6 +533,13 @@ Each fix was written test-first; the red runs are in `test-log.md`.
 - [X] T106 The hint and the guide offer "Entire screen + system audio" when a shared tab carries no call sound (a WhatsApp Web call can open in its own window). `web/js/core/messages.js`, `web/guide.html`, `specs/001-live-call-text/contracts/ui-contract.md`
 - [X] T107 Run unit, relay and e2e tests and the 10-minute soak; record the results in `specs/001-live-call-text/test-log.md`
 
+### Responsive layout (owner's request, 2026-11-20)
+
+- [X] T108 Write `tests/e2e/responsive.spec.js`: 16 screen sizes from 320 x 568 to 3840 x 2160, portrait and landscape, on the agent page, the customer page and the guide (nothing sideways, usable conversation height); the 1366 x 768 laptop check; bigger text on big screens. Seen failing first (13 of 18)
+- [X] T109 Make the pages responsive (FR-037 amended): `web/index.html` (left column and messages group), `web/css/app.css` (two columns from 960 px, a conversation that never shrinks below 300 px, phone and touch rules, big-screen sizes, guide on small and big screens), `web/css/viewer.css` (phones held sideways, narrow-phone status, big screens)
+- [X] T110 Run the full e2e suite and record the results in `specs/001-live-call-text/test-log.md`
+- [X] T111 Replace a recognition session aborted before its `start` at once, instead of waiting 1.5 s for an `end` that never comes (test-log Finding 13; SC-005 recovery went from 4.7-4.9 s to about 3.2 s). `web/js/browser/recognizer.js`; `tests/unit/recognizer.test.js`
+
 ---
 
 ## Dependencies & Execution Order

@@ -81,3 +81,51 @@
 }
 .v-foot svg { width: 16px; height: 16px; margin-top: 2px; }
 .v-foot .urdu { font-family: var(--font-urdu); line-height: 2; }
+
+/* Narrow phones: the status reads as one centred block, the dot in front of the English
+   words and the Urdu words on their own line. */
+@media (max-width: 480px) {
+  .v-status { display: block; border-radius: 18px; }
+  .v-status::before { display: inline-block; vertical-align: middle; margin-inline-end: 8px; }
+  .v-status .ur { display: block; }
+  .v-status .en::after { content: none; }
+}
+
+/* Phones held sideways: the name and the status share one row and the note shrinks, so the
+   agent's words keep most of the short screen. */
+@media (orientation: landscape) and (max-height: 520px) {
+  .viewer-page .v-app {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    grid-template-rows: auto minmax(0, 1fr) auto;
+    gap: 8px 12px;
+    padding: 8px max(12px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left));
+  }
+  .viewer-page .v-bar { grid-column: 1; }
+  .viewer-page .tagline { display: none; }
+  .viewer-page .brand-mark { width: 30px; height: 30px; }
+  .viewer-page .brand h1 { font-size: 16px; }
+  .v-status { grid-column: 2; justify-self: end; align-self: center; padding: 4px 12px; font-size: 13px; }
+  .v-status .ur { line-height: 1.6; }
+  .v-transcript { grid-column: 1 / -1; padding: 10px 14px; gap: 8px; }
+  .v-foot { grid-column: 1 / -1; gap: 6px; font-size: 11px; }
+  .v-foot svg { width: 12px; height: 12px; margin-top: 1px; }
+  .v-foot > div { display: flex; flex-wrap: wrap; gap: 0 12px; }
+  .v-foot .urdu { line-height: 1.5; }
+}
+
+/* Desktops and big screens: a wider column and bigger text. */
+@media (min-width: 1200px) {
+  .viewer-page .v-app { max-width: 900px; padding-top: 24px; }
+  .v-line { font-size: 30px; }
+  .v-status { font-size: 17px; }
+  .v-foot { font-size: 14px; }
+}
+@media (min-width: 2000px) and (min-height: 1100px) {
+  .viewer-page .v-app { max-width: 1160px; }
+  .viewer-page .brand-mark { width: 48px; height: 48px; }
+  .viewer-page .brand h1 { font-size: 24px; }
+  .v-line { font-size: 36px; }
+  .v-status { font-size: 20px; }
+  .v-foot { font-size: 17px; }
+}

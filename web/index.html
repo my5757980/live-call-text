@@ -26,6 +26,7 @@
       <span class="status-chip" data-testid="status" data-state="ready" role="status">Ready</span>
     </header>
 
+    <div class="side">
     <section class="card controls" aria-label="Call controls">
       <div class="field">
         <label for="customer-lang">Customer speaks</label>
@@ -52,6 +53,7 @@
         </button>
       </div>
 
+      <div class="controls-foot">
       <div class="meters" aria-label="Sound levels">
         <div class="meter">
           <span class="meter-label">Call sound</span>
@@ -67,10 +69,27 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 14v-2a8 8 0 0 1 16 0v2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><rect x="3" y="13" width="5" height="7" rx="2" fill="currentColor"/><rect x="16" y="13" width="5" height="7" rx="2" fill="currentColor"/></svg>
         <p data-testid="headset-reminder">Use a headset, so the customer's voice doesn't reach your microphone.</p>
       </div>
+      </div>
     </section>
 
-    <div class="banner" data-testid="message" role="alert" hidden></div>
-    <div class="banner banner-hint" data-testid="hint" hidden></div>
+    <section class="card link-card" aria-label="Customer link">
+      <div class="link-info">
+        <h2>Customer link <span class="badge">Optional</span></h2>
+        <p class="muted">Paste it in the chat so the customer can read your words live.</p>
+        <span class="link-status" data-testid="link-status" data-state="off"></span>
+      </div>
+      <button type="button" class="btn btn-secondary" data-testid="copy-link" id="copy-link" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        Copy customer link
+      </button>
+    </section>
+    </div>
+
+    <div class="main">
+    <div class="alerts">
+      <div class="banner" data-testid="message" role="alert" hidden></div>
+      <div class="banner banner-hint" data-testid="hint" hidden></div>
+    </div>
 
     <section class="card conversation" aria-label="Conversation">
       <div class="card-head">
@@ -95,18 +114,7 @@
         </div>
       </div>
     </section>
-
-    <section class="card link-card" aria-label="Customer link">
-      <div class="link-info">
-        <h2>Customer link <span class="badge">Optional</span></h2>
-        <p class="muted">Paste it in the chat so the customer can read your words live.</p>
-        <span class="link-status" data-testid="link-status" data-state="off"></span>
-      </div>
-      <button type="button" class="btn btn-secondary" data-testid="copy-link" id="copy-link" disabled>
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-        Copy customer link
-      </button>
-    </section>
+    </div>
 
     <footer class="app-foot">
       <div class="note">
