@@ -19,6 +19,9 @@ for (const { name, wav, lang, keywords } of [
     await agent.getByTestId('customer-lang').selectOption(lang);
     await agent.getByTestId('start').click();
     await expect(agent.getByTestId('status')).toHaveText("Listening to the laptop's sound", { timeout: 15_000 });
+    // Only the sound is used: the shared screen picture is slowed to about one frame a second.
+    await expect.poll(() => agent.evaluate(() => window.__lct.state.capture.videoTrack.getSettings().frameRate))
+      .toBeLessThanOrEqual(5);
 
     await playThroughSpeakers(wav);
     await expect(agent.locator('[data-testid="line"][data-side="customer"]').filter({ hasText: keywords }).first())

@@ -7,17 +7,21 @@ const BACKOFF_MS = [1000, 2000, 4000, 5000];
 const GIVE_UP_AFTER_MS = 60_000;
 const PING_MS = 30_000;
 const TICK_MS = 250;
-const MAX_QUEUED_FINALS = 20;
+// Lines that had to wait go out one by one, well under the relay's limit of 5 frames a
+// second, so a burst after a reconnect is not dropped.
+const DRAIN_MS = 400;
+const MAX_WAITING = 20;
 
 export function createRelayClient({ origin, session, onState, WebSocketImpl = WebSocket }) {
   const url = `${origin.replace(/^http/, 'ws')}/ws?role=agent&sid=${session.sid}`;
   const protocols = ['lct1', `auth.${session.token}.${session.created}`];
   const throttle = createThrottle({ intervalMs: 1000 });
-  const queuedFinals = [];
+  const waiting = [];           // final lines not sent yet, oldest first
   let ws = null;
   let state = null;
   let everLive = false;
   let ended = false;
+  let gaveUp = false;
   let attempt = 0;
   let downSince = null;
   let retryTimer = null;
@@ -30,17 +34,27 @@ export function createRelayClient({ origin, session, onState, WebSocketImpl = We
     }
   };
 
-  const send = (frame) => {
-    if (ws?.readyState === 1) {
-      ws.send(frame);
-      return true;
-    }
-    return false;
+  const raw = (frame) => {
+    if (ws?.readyState !== 1) return false;
+    ws.send(frame);
+    return true;
   };
 
+  // Sends a caption now, or keeps it for later. While older lines are waiting, newer ones
+  // queue behind them, so the customer reads everything in order. In-progress words are
+  // not kept: their final line follows.
+  function out(caption) {
+    const frame = buildCaption(caption);
+    if (!waiting.length && state === 'live' && raw(frame)) return;
+    if (caption.final && waiting.length < MAX_WAITING) waiting.push(frame);
+  }
+
   const tickTimer = setInterval(() => {
-    for (const c of throttle.tick()) send(buildCaption(c));
+    for (const c of throttle.tick()) out(c);
   }, TICK_MS);
+  const drainTimer = setInterval(() => {
+    if (waiting.length && state === 'live' && raw(waiting[0])) waiting.shift();
+  }, DRAIN_MS);
 
   function connect() {
     if (ended) return;
@@ -61,14 +75,13 @@ export function createRelayClient({ origin, session, onState, WebSocketImpl = We
         attempt = 0;
         downSince = null;
         set('live');
-        while (queuedFinals.length) send(queuedFinals.shift());
       } else if (msg.state === 'expired' || msg.state === 'ended') {
         finish();
       }
     };
     socket.onopen = () => {
       clearInterval(pingTimer);
-      pingTimer = setInterval(() => send('ping'), PING_MS);
+      pingTimer = setInterval(() => raw('ping'), PING_MS);
     };
     socket.onclose = (e) => {
       clearInterval(pingTimer);
@@ -79,6 +92,7 @@ export function createRelayClient({ origin, session, onState, WebSocketImpl = We
       }
       downSince ??= Date.now();
       if (Date.now() - downSince >= GIVE_UP_AFTER_MS) {
+        gaveUp = true;
         set('unavailable');
         return;
       }
@@ -93,6 +107,7 @@ export function createRelayClient({ origin, session, onState, WebSocketImpl = We
     clearTimeout(retryTimer);
     clearInterval(pingTimer);
     clearInterval(tickTimer);
+    clearInterval(drainTimer);
     set('ended');
   }
 
@@ -105,17 +120,24 @@ export function createRelayClient({ origin, session, onState, WebSocketImpl = We
     sendCaption(caption) {
       if (ended) return;
       for (const part of splitCaption(caption)) {
-        for (const c of throttle.offer(part)) {
-          const frame = buildCaption(c);
-          if (!send(frame) && c.final && queuedFinals.length < MAX_QUEUED_FINALS) queuedFinals.push(frame);
-        }
+        for (const c of throttle.offer(part)) out(c);
       }
+    },
+
+    // After 60 s without the relay the client stops trying by itself. Pressing Copy
+    // customer link again starts it once more, with the same link.
+    retry() {
+      if (ended || !gaveUp) return;
+      gaveUp = false;
+      downSince = null;
+      attempt = 0;
+      connect();
     },
 
     // Call ended (Stop, sharing ended, or page closing): tell the relay, then close.
     end() {
       if (ended) return;
-      send(buildEnd());
+      raw(buildEnd());
       try { ws?.close(1000, 'ended'); } catch { /* already closed */ }
       finish();
     },

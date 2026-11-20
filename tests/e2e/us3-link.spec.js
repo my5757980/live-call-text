@@ -8,11 +8,12 @@ let browser;
 test.beforeAll(async () => { browser = await launchChrome('tab'); });
 test.afterAll(async () => { await browser?.close(); });
 
-async function setup({ routeRelay } = {}) {
+async function setup({ routeRelay, initScript } = {}) {
   const context = await browser.newContext();
   await context.grantPermissions(['clipboard-read', 'clipboard-write'], { origin: BASE });
   await serveFixtures(context);
   await installStandInMic(context, { clip: 'en', mode: 'clip' });
+  if (initScript) await context.addInitScript(initScript);
   if (routeRelay) await context.routeWebSocket(/\/ws/, routeRelay);
   const wa = await openStandIn(context, 'ur');
   const agent = await openAgent(context);
@@ -93,4 +94,61 @@ test('a link that was never valid shows the invalid state without connecting', a
   await expect(page.getByTestId('v-status')).toHaveAttribute('data-state', 'invalid');
   await expect(page.getByTestId('v-status')).toContainText('یہ کال ختم ہو چکی ہے یا لنک درست نہیں ہے');
   await phone.close();
+});
+
+// Review 2026-11-12 (B9): a damaged link used to leave the page on "Connecting..." for ever.
+test('a damaged link shows the invalid state; the page note promises only what is true', async () => {
+  const { phone, page } = await openCustomer(`${BASE}/v.html#%E0%A4%A`);
+  await expect(page.getByTestId('v-status')).toHaveAttribute('data-state', 'invalid');
+  await expect(page.getByTestId('v-note')).toContainText("Only the agent's words are shown here. Call audio is never recorded.");
+  await expect(page.getByTestId('v-note')).toContainText('کال کی آواز کبھی ریکارڈ نہیں ہوتی');
+  await phone.close();
+});
+
+// Review 2026-11-12 (B7): a refused copy used to do nothing at all.
+test('if Chrome refuses to copy, the page says so and the link stays on screen', async () => {
+  const { context, agent } = await setup({
+    initScript: () => {
+      navigator.clipboard.writeText = () => Promise.reject(new DOMException('Write permission denied.', 'NotAllowedError'));
+    },
+  });
+  await agent.getByTestId('copy-link').click();
+  await expect(agent.getByTestId('message')).toHaveAttribute('data-code', 'W_LINK_COPY_FAILED', { timeout: 5_000 });
+  await expect(agent.getByTestId('link-status')).toHaveAttribute('data-state', 'live', { timeout: 10_000 });
+  await expect(agent.getByTestId('link-status')).toContainText('/v.html#');
+  await context.close();
+});
+
+// Review 2026-11-12 (B9): a second link opened in the same tab kept showing the first
+// call, and the phone's screen switched off while the customer was reading.
+test('a new link in the same tab loads that call; the screen stays on while the call is live', async () => {
+  const { context, agent } = await setup();
+  const url = await copyLink(agent);
+  const phone = await browser.newContext({ ...devices['Pixel 7'] });
+  await phone.addInitScript(() => {
+    window.__wake = [];
+    Object.defineProperty(navigator, 'wakeLock', {
+      configurable: true,
+      value: {
+        request: async (type) => {
+          window.__wake.push(type);
+          return { release: async () => { window.__wake.push('released'); }, addEventListener() {} };
+        },
+      },
+    });
+  });
+  const page = await phone.newPage();
+  await page.goto(`${BASE}/v.html#not-a-real-id`);
+  await expect(page.getByTestId('v-status')).toHaveAttribute('data-state', 'invalid');
+  expect(await page.evaluate(() => window.__wake)).toEqual([]);
+
+  await page.evaluate((hash) => { location.hash = hash; }, new URL(url).hash);
+  await expect(page.getByTestId('v-status')).toHaveAttribute('data-state', /waiting|live/, { timeout: 10_000 });
+  await expect.poll(() => page.evaluate(() => window.__wake)).toEqual(['screen']);
+
+  await agent.getByTestId('stop').click();
+  await expect(page.getByTestId('v-status')).toHaveAttribute('data-state', 'ended', { timeout: 5_000 });
+  await expect.poll(() => page.evaluate(() => window.__wake)).toEqual(['screen', 'released']);
+  await phone.close();
+  await context.close();
 });

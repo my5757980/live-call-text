@@ -433,7 +433,7 @@ gated on approval, and the real-call release gate
 - [X] T068 [P] Write `tests/e2e/polish.spec.js`:
   - `help-link` opens `guide.html`, and all 6 section headings are present
   - computed font-size is at least 22 px for `[data-testid=line]` and at least 24 px for `[data-testid=v-line]` (FR-015)
-- [ ] T069 [P] Write `tests/e2e/soak.spec.js`, skipped unless `SOAK_MINUTES` is set:
+- [X] T069 [P] Write `tests/e2e/soak.spec.js`, skipped unless `SOAK_MINUTES` is set:
   - in `tab` mode, replay the stand-in clip every 20 s for `SOAK_MINUTES` minutes
   - every replay must add a new final Customer line, and no message other than `I_*` may appear (a proxy for SC-004)
   - run it once with `SOAK_MINUTES=10` and record the result in `specs/001-live-call-text/test-log.md`
@@ -512,6 +512,26 @@ gated on approval, and the real-call release gate
   - no horizontal scroll on the agent page at 640 px or on the customer page at 390 px
   - both pages render in dark mode (`colorScheme: 'dark'`) with a dark background
   - the text-to-background contrast of a Customer line, an Agent line and the status is at least 4.5:1 in both themes
+
+### Review fixes (project review 2026-11-12; owner: "jo jo maslayy haii fix karoo", 2026-11-13)
+
+Each fix was written test-first; the red runs are in `test-log.md`.
+
+- [X] T093 English cut mid-sentence on Chrome 157 (test-log Finding 9): the captured call sound is taken without Chrome's call processing (FR-043). `web/js/browser/capture.js`; check in `tests/e2e/us1-tab.spec.js`
+- [X] T094 Only words heard while the customer speaks can be echo; a repeat-back is shown, also on the customer link. A possible echo is held back from the customer link until its final line is checked again (test-log Finding 12). `web/js/core/speech-overlap.js`, `web/js/core/echo-filter.js`, `web/js/agent.js`; `tests/unit/speech-overlap.test.js`, `tests/unit/echo-filter.test.js`, `tests/e2e/echo.spec.js`
+- [X] T095 The pause check also watches the text, so a missed speaker on a noisy line is not cut at every word. `web/js/core/pause-finalizer.js`; `tests/unit/pause-finalizer.test.js`
+- [X] T096 A microphone that goes away mid-call shows W_MIC_MISSING; the agent side comes back by itself (FR-017 amended). `web/js/agent.js`, `web/js/core/transcript.js`; `tests/unit/transcript.test.js`, `tests/e2e/us2-mic-problems.spec.js`, `tests/e2e/helpers/stand-in-mic.js`
+- [X] T097 Sessions that keep ending at once back off and pause with W_SPEECH_SERVICE; normal session ends restart at once. `web/js/core/lane-policy.js`, `web/js/browser/recognizer.js`; `tests/unit/lane-policy.test.js`, `tests/unit/recognizer.test.js`
+- [X] T098 The stall watch counts only changing text as progress; three fruitless restarts in a row show W_SPEECH_SERVICE until words come again. `web/js/core/stall-watch.js`, `web/js/agent.js`; `tests/unit/stall-watch.test.js`
+- [X] T099 Copy failure shows W_LINK_COPY_FAILED; Copy customer link retries a link that gave up (FR-024, FR-031 amended). `web/js/agent.js`, `web/js/browser/relay-client.js`, `web/js/core/messages.js`; `tests/unit/relay-client.test.js`, `tests/e2e/us3-link.spec.js`
+- [X] T100 Lines waiting for a reconnect go out in order, about 2.5 per second, so the relay keeps them all. `web/js/browser/relay-client.js`; `tests/unit/relay-client.test.js`
+- [X] T101 Customer page: damaged link shows "not valid", a new link in the same tab loads its call, the screen stays on while live, and an ended page stops listening (FR-041). `web/js/viewer.js`, `web/js/core/link-session.js`, `web/js/browser/viewer-client.js`, `web/v.html`; `tests/unit/viewer-client.test.js`, `tests/unit/link-session.test.js`, `tests/e2e/us3-link.spec.js`
+- [X] T102 The pages promise only that call audio is never recorded (FR-035 amended). `web/js/core/messages.js`, `web/index.html`, `web/v.html`; `tests/unit/messages.test.js`
+- [X] T103 Relay hardening: Origin check before the hub, viewers that send are closed, agent floods are closed, no new viewers after 4 h, security headers on the pages (FR-042). `relay/src/index.js`, `relay/src/hub.js`, `relay/src/hub-logic.js`, `web/_headers`; `tests/unit/hub-logic.test.js`, `tests/relay/relay.test.js`
+- [X] T104 The shared picture is slowed to one frame a second (about a third less work for Chrome; the sound is unaffected). `web/js/browser/capture.js`; checks in `tests/e2e/us1-tab.spec.js` and `tests/e2e/us1-system-audio.spec.js`
+- [X] T105 The 100 ms checks and the automatic gain tick from a worker, so they keep their pace while the page is hidden; new sessions start without waiting for a timer (FR-016 amended, test-log Finding 10). `web/js/browser/ticker.js`, `web/js/browser/tick-worker.js`, `web/js/agent.js`, `web/js/browser/audio-graph.js`, `web/js/browser/recognizer.js`; `tests/unit/ticker.test.js`, `tests/unit/recognizer.test.js`
+- [X] T106 The hint and the guide offer "Entire screen + system audio" when a shared tab carries no call sound (a WhatsApp Web call can open in its own window). `web/js/core/messages.js`, `web/guide.html`, `specs/001-live-call-text/contracts/ui-contract.md`
+- [X] T107 Run unit, relay and e2e tests and the 10-minute soak; record the results in `specs/001-live-call-text/test-log.md`
 
 ---
 
@@ -609,4 +629,4 @@ Task: "T059-T061 relay/src/*" alongside "T062 relay-client.js" and "T063 viewer-
 - Never weaken or skip a failing test; record failures verbatim in `test-log.md`
 - System-audio tests play a quiet clip through the laptop's speakers and open a visible Chrome window
 - e2e tests need internet (Chrome's speech service)
-- There is no git repository yet. If one is created, commit after each task or logical group
+- The project is in git (public repo `my5757980/live-call-text`). Commit after each task or logical group

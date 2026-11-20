@@ -42,5 +42,4 @@
   Start adds a new call section instead of clearing the screen.
 - FR-015 (readable text) and SC-003 and SC-007 (understandability, first-try success) are checked by
   people in the real-call checklist and the agent trial, not by automated tests.
-- The project constitution (`.specify/memory/constitution.md`) is still the blank template. Fill it
-  with `/sp.constitution` before `/sp.plan`, because the plan's Constitution Check needs it.
+- (Resolved) The constitution was ratified on 2026-10-03 (v1.0.0, now v1.1.0) before `/sp.plan`.

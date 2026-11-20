@@ -5,7 +5,9 @@ import { parseAgentFrame } from '../../web/js/core/protocol.js';
 
 export const MAX_VIEWERS = 5;
 export const MAX_FRAMES_PER_SEC = 5;
+export const FLOOD_FRAMES_PER_SEC = 50;   // far beyond what the agent page ever sends
 export const MAX_DROPS = 3;
+export const MAX_VIEWER_STRIKES = 3;
 
 export const CLOSE = Object.freeze({
   NORMAL: 1000,
@@ -20,6 +22,32 @@ export const CLOSE = Object.freeze({
 export function parseUpgrade(url) {
   const params = new URL(url).searchParams;
   return { role: params.get('role'), sid: params.get('sid') };
+}
+
+function sameHost(origin, url) {
+  try {
+    return new URL(origin).host === new URL(url).host;
+  } catch {
+    return false;
+  }
+}
+
+// Checked by the Worker before the hub is woken, so junk never uses the hub's free
+// allowance: it must be a WebSocket upgrade for a known role and a well-formed sid. A
+// browser always says which site opened the socket (Origin); another website is refused,
+// so nobody else's pages can use this relay. Clients that send no Origin are not browsers.
+export function checkWsRequest({ url, upgrade, origin }) {
+  if (String(upgrade ?? '').toLowerCase() !== 'websocket') return { ok: false, status: 426 };
+  const { role, sid } = parseUpgrade(url);
+  if ((role !== 'agent' && role !== 'viewer') || !isValidSid(sid)) return { ok: false, status: 400 };
+  if (origin != null && !sameHost(origin, url)) return { ok: false, status: 403 };
+  return { ok: true };
+}
+
+// A call is live while its agent socket is the current one and the link is under 4 hours
+// old (FR-029). `a` is the agent socket's attachment.
+export function isAgentLive(a, now) {
+  return Boolean(a) && a.role === 'agent' && !a.replaced && !a.ended && now - a.created <= MAX_AGE_MS;
 }
 
 const AUTH_RE = /^auth\.([A-Za-z0-9_-]{43})\.(\d{1,16})$/;
@@ -54,6 +82,7 @@ export function onAgentFrame({ frame, attachment, now }) {
     a.count = 0;
   }
   a.count = (a.count ?? 0) + 1;
+  if (a.count > FLOOD_FRAMES_PER_SEC) return { attachment: a, close: CLOSE.BAD_FRAMES };
   if (a.count > MAX_FRAMES_PER_SEC) return { attachment: a, drop: 'rate' };
 
   const parsed = parseAgentFrame(frame);
@@ -65,6 +94,13 @@ export function onAgentFrame({ frame, attachment, now }) {
   }
   if (parsed.msg.t === 'end') return { attachment: a, end: true };
   return { attachment: a, forward: frame };
+}
+
+// Viewers only listen (their `ping` is answered without reaching this code). Anything a
+// viewer sends is dropped, and a socket that keeps sending is closed.
+export function onViewerFrame({ attachment }) {
+  const a = { ...attachment, strikes: (attachment?.strikes ?? 0) + 1 };
+  return a.strikes >= MAX_VIEWER_STRIKES ? { attachment: a, close: CLOSE.BAD_FRAMES } : { attachment: a };
 }
 
 // What viewers hear when an agent socket closes.

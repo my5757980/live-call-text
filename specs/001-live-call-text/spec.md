@@ -2,7 +2,7 @@
 
 **Feature Branch**: `001-live-call-text`  
 **Created**: 2026-10-03  
-**Status**: Draft  
+**Status**: Implemented; real-call checks pending (amended 2026-11-20 after the project review)  
 **Input**: User description: "Live call text for agents. While an agent talks to a customer on a laptop call (WhatsApp Web in Chrome, the WhatsApp Desktop app, or a VoIP dialer installed on the laptop), the customer's words appear as live text on the agent's screen, in Urdu or English, 100% free, with nothing for the customer to do. The agent's own words can also be shown, and the agent can optionally send the customer a link to see the agent's words as live text on their phone." (The command was run without text. This description was written from the project context agreed with the owner on 2026-10-02.)
 
 ## User Scenarios & Testing *(mandatory)*
@@ -178,6 +178,17 @@ call without saving and check that the page asks first.
 - **Page opened in a browser other than Google Chrome, on a phone, or in an old Chrome**: the page
   explains that it needs an up-to-date Google Chrome on a laptop and does not start.
 - **Speech service not responding**: the page says captions are paused and keeps retrying by itself.
+  This includes recognition sessions that keep ending at once, and sessions that go quiet three
+  times in a row while someone is speaking; a single quiet session is replaced without a message
+  (amended 2026-11-20).
+- **Headset unplugged during a call**: the page says the microphone is missing, customer captions
+  carry on, and the agent's own captions come back by themselves when a microphone is available
+  again (added 2026-11-20).
+- **Agent page hidden behind WhatsApp or the dialer**: captions and all checks carry on at full
+  speed (added 2026-11-20; the guide still advises a visible window so the agent can read).
+- **The agent repeats the customer's words back** (to confirm a number, say): the agent's line is
+  shown, saved and sent to the customer link like any other line; only words heard while the
+  customer is speaking can count as echo (added 2026-11-20, FR-038).
 - **Agent closes or reloads the page during a call**: listening stops, the text is gone, and any
   customer link for that call ends.
 - **Agent presses Start again after a call**: the earlier call's text is cleared, after offering to
@@ -226,8 +237,11 @@ call without saving and check that the page asks first.
   glance from normal sitting distance.
 - **FR-016**: Captions MUST continue through silences of any length and calls of at least 60 minutes,
   and MUST resume by themselves after internet drops of up to 60 seconds or a speech-service hiccup,
-  with no agent action.
-- **FR-017**: A blocked or missing microphone MUST NOT stop customer captions.
+  with no agent action. This MUST also hold while the agent page is hidden behind another window
+  (amended 2026-11-20).
+- **FR-017**: A blocked or missing microphone, or one that goes away during a call, MUST NOT stop
+  customer captions. When a microphone becomes available again during the call, the agent's
+  captions MUST start again by themselves (amended 2026-11-20).
 
 **Stopping**
 
@@ -243,8 +257,9 @@ call without saving and check that the page asks first.
 **Messages and help**
 
 - **FR-021**: The page MUST show a plain-language message with the exact fix for each of these
-  problems: no call sound in what was shared; sharing stopped; microphone blocked or missing; no
-  internet; speech service not responding; not Google Chrome, not a laptop, or Chrome too old.
+  problems: no call sound in what was shared; sharing stopped; microphone blocked or missing (also
+  when it goes away during a call); no internet; speech service not responding; the customer link
+  could not be copied; not Google Chrome, not a laptop, or Chrome too old (amended 2026-11-20).
 - **FR-022**: Labels and messages on the agent page MUST use simple English words. A one-page guide
   in simple Roman Urdu MUST explain how to start captions for each call type, how to send the
   customer link, and what each message means.
@@ -253,7 +268,8 @@ call without saving and check that the page asks first.
 **Customer link**
 
 - **FR-024**: While listening, the agent MUST be able to copy a customer link for the current call
-  with one action.
+  with one action. If Chrome refuses to copy, the page MUST say so and keep the link on screen to
+  copy by hand (amended 2026-11-20).
 - **FR-025**: The customer link MUST open in a normal phone browser with no app, no sign-up and no
   login, and show the agent's words live in large text, Urdu right-to-left.
 - **FR-026**: The customer's page MUST show only the agent's words spoken after the page was opened:
@@ -267,6 +283,14 @@ call without saving and check that the page asks first.
 - **FR-030**: Only the agent page that started a call MUST be able to send text to that call's link.
 - **FR-031**: If the customer-link service is unavailable or out of free capacity, the agent's
   captions MUST keep working and the page MUST say "Customer link is not available right now".
+  Pressing Copy customer link again MUST try the same link again (amended 2026-11-20).
+- **FR-041**: The customer page MUST keep the phone's screen on while the call is live, where the
+  browser allows it. A damaged link MUST show "not valid" at once, and another link opened in the
+  same tab MUST show that link's call (added 2026-11-20).
+- **FR-042**: The customer-link service MUST refuse connections opened by other websites, MUST
+  close customer connections that send anything, and MUST close an agent connection that floods
+  it. A customer page opened more than 4 hours after the link was made MUST show "not valid"
+  (added 2026-11-20).
 
 **Privacy and cost**
 
@@ -277,7 +301,8 @@ call without saving and check that the page asks first.
 - **FR-034**: The customer-link service MUST only pass the agent's words on to open customer pages,
   and MUST NOT keep any call text, during or after the call.
 - **FR-035**: The page's help MUST say in one line that speech is sent to Google through Chrome to be
-  turned into text.
+  turned into text, and that call audio is never recorded. No page may say that "nothing is
+  recorded", because Save chat keeps the text (amended 2026-11-20).
 - **FR-036**: Using the product MUST cost nothing: no paid service, paid plan, API key or credit card,
   and no sign-up for agents or customers.
 
@@ -300,6 +325,15 @@ call without saving and check that the page asks first.
   customer link. An Agent line that repeats at least 60% of what the customer says at the same
   time counts as echo and is hidden. With different languages the echo cannot be matched, so the
   headset reminder (FR-023) remains the main fix.
+  *Amended 2026-11-20*: words alone are not enough. A line counts as echo only if the agent's
+  speech overlapped the customer's speech for at least 30% of its time. An agent who repeats the
+  customer's words after the customer has finished MUST NOT be hidden.
+
+**Call sound reaches the speech service unchanged** (added 2026-11-20, test-log Finding 9)
+
+- **FR-043**: The captured call sound MUST NOT pass through Chrome's own call processing (echo
+  cancellation, noise suppression, automatic gain). That processing dropped short pieces of the
+  sound and cut English text mid-sentence. The page evens out the level itself.
 
 **Look and feel** (added 2026-10-03 at the owner's request: "UI/UX aik dam professional decent")
 
@@ -383,7 +417,10 @@ call without saving and check that the page asks first.
   the speech service can.
 - Soft and loud speech are both supported; the page evens out the level for the speech service.
   Very fast English (about 1.2× normal speed or faster) may lose words, a limit of Chrome's free
-  English recognition (test-log Finding 8). Urdu at the same speeds is not affected.
+  English recognition (test-log Finding 8). Urdu at the same speeds is not affected. Re-measured on
+  2026-11-20 after FR-043: the sped-up clip still stops after the same word on every path, the
+  microphone path included, so this is the speech service and not the page. Normal-speed English
+  is complete.
 - Customers open the link in their phone's normal browser. The agent shares it through the existing
   WhatsApp chat (or SMS).
 - After a call the agent can save its chat as a text file on the laptop (FR-039). Files go to Chrome's

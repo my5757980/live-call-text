@@ -15,13 +15,13 @@ codes listed here. The visible wording may be polished, but each code keeps its 
 | `stop` | button | Visible while listening |
 | `status` | text | One of `Ready`, `Listening to a browser tab`, `Listening to the laptop's sound`, `Listening to an app window`, `Paused: No internet`, `Paused: Speech service not responding`, `Stopped` (FR-006). `data-state` is `ready`, `choosing`, `listening`, `paused` or `stopped` |
 | `meter-call` | meter-like element | `data-level` from 0 to 1 (FR-007) |
-| `meter-mic` | meter-like element | `data-level` from 0 to 1; `data-state="unavailable"` when there is no microphone |
+| `meter-mic` | meter-like element | `data-level` from 0 to 1; `data-state` is `off` (no call), `on`, or `unavailable` when there is no microphone or it went away during the call |
 | `transcript` | scroll container | Holds call sections and lines (FR-010, FR-020) |
 | `call-section` | group | `data-call-id` and a visible start time |
 | `line` | text row | `data-side` is `customer` or `agent`; `data-final` is `true` or `false`; `lang`; `dir` is `rtl` for Urdu (FR-009, FR-011, FR-014) |
 | `message` | alert area | `data-code` holds one code from the catalog below |
 | `hint` | note | Shown for H_NO_CALL_SOUND (FR-008) |
-| `copy-link` | button | Enabled only while listening (FR-024) |
+| `copy-link` | button | Enabled only while listening (FR-024). If the link is `unavailable`, pressing it also tries to connect the link again |
 | `link-status` | text | `data-state` is `off` (no link yet), `connecting`, `live`, `reconnecting`, `unavailable` or `ended`. While live, it shows the link text and sets `data-url`, so the agent can also copy it by hand |
 | `save-chat` | button | Saves the shown call's chat as a text file (FR-039). Enabled when the chat has text. Shows "Saved" until new text arrives |
 | `new-call` | button | Clears the conversation (FR-040). Disabled while listening or when the chat is empty |
@@ -40,6 +40,11 @@ codes listed here. The visible wording may be polished, but each code keeps its 
 | `v-status` | text | `data-state` is `connecting`, `waiting`, `live`, `paused`, `ended` or `invalid`. Labels are in English and Urdu (FR-027) |
 | `v-transcript` | container | Agent lines only (FR-026) |
 | `v-line` | text row | `data-final`; `lang`; `dir="rtl"` for Urdu |
+| `v-note` | text | The fixed customer page note, in English and Urdu |
+
+The customer page keeps the phone's screen on while its state is `waiting`, `live` or `paused`,
+where the browser allows it. A link whose session id is damaged shows `invalid` without connecting.
+Opening another link in the same tab loads that link's call.
 
 ## Message catalog (agent page)
 
@@ -53,12 +58,13 @@ codes listed here. The visible wording may be polished, but each code keeps its 
 | E_NO_CALL_SOUND_TAB | A tab was shared with its sound switched off | "No tab sound. Press Start again and keep 'Also share tab audio' on." |
 | I_SHARING_STOPPED | Sharing ended from outside the page | "Listening stopped because sharing ended. Press Start to continue." |
 | W_MIC_BLOCKED | Microphone permission denied | "Your microphone is blocked, so your own words won't show. Click the icon in the address bar and allow the microphone. Customer text still works." |
-| W_MIC_MISSING | No microphone found | "No microphone found. Plug in your headset to see your own words. Customer text still works." |
+| W_MIC_MISSING | No microphone found, or it went away during the call | "No microphone found. Plug in your headset to see your own words. Customer text still works." |
 | W_NO_INTERNET | Offline, or a network error | "No internet - captions paused. They will continue by themselves." |
-| W_SPEECH_SERVICE | The speech service is not responding | "Speech service is not responding - captions paused. Trying again..." |
-| H_NO_CALL_SOUND | No call sound heard for 20 s after Start | "No call sound heard yet. Check that you shared the call tab, or that your headset is the laptop's default sound device." |
+| W_SPEECH_SERVICE | The speech service is not responding: its sessions keep ending at once, or keep going quiet while someone speaks | "Speech service is not responding - captions paused. Trying again..." |
+| H_NO_CALL_SOUND | No call sound heard for 20 s after Start | "No call sound heard yet. If the customer is already talking, press Stop, then Start again and choose 'Entire screen' with 'Also share system audio'. Also check that your headset is the laptop's default sound device." |
 | I_LINK_COPIED | Copy customer link succeeded | "Link copied - paste it in the chat." |
 | W_LINK_UNAVAILABLE | Relay unreachable or out of free capacity | "Customer link is not available right now." |
+| W_LINK_COPY_FAILED | Chrome refused to copy the link | "The link could not be copied. Select the link shown below and copy it by hand." |
 | I_CHAT_SAVED | Save chat succeeded | "Chat saved to your Downloads folder." |
 
 **Showing one message at a time**: the `message` area shows one code. When several are active,
@@ -68,19 +74,24 @@ it picks the first in this order:
 2. W_NO_INTERNET
 3. W_SPEECH_SERVICE
 4. W_LINK_UNAVAILABLE
-5. W_MIC_BLOCKED
-6. W_MIC_MISSING
-7. I_SHARING_STOPPED
-8. I_LINK_COPIED
-9. I_CHAT_SAVED
+5. W_LINK_COPY_FAILED
+6. I_LINK_COPIED
+7. I_CHAT_SAVED
+8. W_MIC_BLOCKED
+9. W_MIC_MISSING
+10. I_SHARING_STOPPED
 
-I_LINK_COPIED and I_CHAT_SAVED clear themselves after 4 s. Microphone warnings stay until the next Start. Network
-warnings clear when the network recovers. H_NO_CALL_SOUND appears only in the `hint` element.
+The short confirmations (5 to 7) come before the warnings that stay for the whole call, so the agent
+always sees the answer to what they just pressed. I_LINK_COPIED and I_CHAT_SAVED clear themselves
+after 4 s, W_LINK_COPY_FAILED after 8 s. Microphone warnings stay until the microphone works again
+or the next Start. Network warnings clear when the network recovers. H_NO_CALL_SOUND appears only
+in the `hint` element.
 
 Fixed texts:
 
 - Headset reminder: "Use a headset, so the customer's voice doesn't reach your microphone."
-- Privacy line: "Speech is sent to Google through Chrome to turn it into text. Nothing is recorded."
+- Privacy line: "Speech is sent to Google through Chrome to turn it into text. Call audio is never recorded."
+- Customer page note: "Only the agent's words are shown here. Call audio is never recorded." / "یہاں صرف ایجنٹ کی بات دکھائی جاتی ہے۔ کال کی آواز کبھی ریکارڈ نہیں ہوتی۔"
 
 ## Customer page labels (English / Urdu)
 

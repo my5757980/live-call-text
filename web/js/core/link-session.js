@@ -10,6 +10,19 @@ const TOKEN_RE = /^[A-Za-z0-9_-]{43}$/;
 
 export const isValidSid = (sid) => typeof sid === 'string' && SID_RE.test(sid);
 
+// Reads the session id from a customer link's fragment (`#<sid>`). Gives null when it is
+// missing or damaged, so the customer page can say "not valid" instead of waiting for ever.
+export function sidFromHash(hash) {
+  let value = String(hash ?? '');
+  if (value.startsWith('#')) value = value.slice(1);
+  try {
+    value = decodeURIComponent(value);
+  } catch {
+    return null;
+  }
+  return isValidSid(value) ? value : null;
+}
+
 export function toBase64Url(bytes) {
   let binary = '';
   for (const b of bytes) binary += String.fromCharCode(b);

@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import {
-  MESSAGES, HEADSET_REMINDER, PRIVACY_LINE, VIEWER_LABELS, messageFor, pickMessage,
+  MESSAGES, HEADSET_REMINDER, PRIVACY_LINE, VIEWER_LABELS, VIEWER_NOTE, messageFor, pickMessage,
 } from '../../web/js/core/messages.js';
 
 // The UI contract is the source of truth for every text (contracts/ui-contract.md).
@@ -26,7 +26,7 @@ const viewerRows = [...section('## Customer page labels (English / Urdu)')
   .map((m) => ({ state: m[1], en: m[2], ur: m[3] }));
 
 test('every catalog code in the contract exists with the same text', () => {
-  assert.equal(catalog.length, 15);
+  assert.equal(catalog.length, 16);
   for (const { code, text } of catalog) {
     assert.ok(MESSAGES[code], `missing code ${code}`);
     assert.equal(MESSAGES[code].text, text, `text differs for ${code}`);
@@ -49,6 +49,17 @@ test('fixed texts match the contract', () => {
   assert.equal(PRIVACY_LINE, contract.match(/- Privacy line: "(.+)"/)[1]);
 });
 
+// Review 2026-11-12 (B10): Save chat keeps the customer's words as text, so "nothing is
+// recorded" was not true. The pages promise only that call audio is never recorded.
+test('the customer page note matches the contract, and no text says nothing is recorded', () => {
+  const [, en, ur] = contract.match(/- Customer page note: "(.+)" \/ "(.+)"/);
+  assert.deepEqual(VIEWER_NOTE, { en, ur });
+  for (const text of [PRIVACY_LINE, VIEWER_NOTE.en]) {
+    assert.doesNotMatch(text, /nothing is recorded/i);
+    assert.match(text, /Call audio is never recorded\.$/);
+  }
+});
+
 test('customer page labels exist in English and Urdu for every state', () => {
   assert.equal(viewerRows.length, 6);
   for (const { state, en, ur } of viewerRows) {
@@ -60,8 +71,10 @@ test('pickMessage shows errors first, then the contract priority order', () => {
   assert.equal(pickMessage([]), null);
   assert.equal(pickMessage(['H_NO_CALL_SOUND']), null);
   assert.equal(pickMessage(['I_LINK_COPIED', 'E_NO_CALL_SOUND_SCREEN']), 'E_NO_CALL_SOUND_SCREEN');
-  const order = ['W_NO_INTERNET', 'W_SPEECH_SERVICE', 'W_LINK_UNAVAILABLE', 'W_MIC_BLOCKED',
-    'W_MIC_MISSING', 'I_SHARING_STOPPED', 'I_LINK_COPIED', 'I_CHAT_SAVED'];
+  // The numbered list in the contract is the source of truth for the order.
+  const order = [...section('**Showing one message at a time**').matchAll(/^\d+\. ([A-Z_]+)$/gm)].map((m) => m[1]);
+  assert.deepEqual(order, ['W_NO_INTERNET', 'W_SPEECH_SERVICE', 'W_LINK_UNAVAILABLE', 'W_LINK_COPY_FAILED',
+    'I_LINK_COPIED', 'I_CHAT_SAVED', 'W_MIC_BLOCKED', 'W_MIC_MISSING', 'I_SHARING_STOPPED']);
   const active = [...order].reverse();
   for (const expected of order) {
     assert.equal(pickMessage(active), expected);

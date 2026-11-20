@@ -7,6 +7,7 @@
 // Nothing is connected to audioContext.destination, so the agent always hears the call
 // exactly as before (FR-004); the AGC only changes what the speech service hears.
 import { createAgc } from '../core/agc.js';
+import { startTicker } from './ticker.js';
 
 const AGC_INTERVAL_MS = 100;
 
@@ -46,7 +47,9 @@ export function createAudioPath(audioContext, track, { gain = 1, agc = true } = 
   const samples = new Float32Array(analyser.fftSize);
   const controller = agc ? createAgc() : null;
   let speech = false;
-  const timer = controller && setInterval(() => {
+  // Ticks from a worker, so the gain and the speech check keep their pace while the page
+  // is hidden (browser/ticker.js).
+  const stopTicker = controller && startTicker(() => {
     const out = controller.update(rmsOf(inputAnalyser, inputSamples), AGC_INTERVAL_MS);
     speech = out.speech;
     agcGain.gain.setTargetAtTime(out.gain, audioContext.currentTime, 0.05);
@@ -64,7 +67,7 @@ export function createAudioPath(audioContext, track, { gain = 1, agc = true } = 
     get agcGain() { return controller?.gain ?? 1; },
 
     stop() {
-      clearInterval(timer);
+      stopTicker?.();
       try {
         source.disconnect();
         inputGain.disconnect();

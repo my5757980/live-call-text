@@ -55,6 +55,46 @@ test('a result during the stretch cancels the request', () => {
   for (let t = 2600; t <= 5000; t += 100) assert.equal(w.sample(0.1, t), false);
 });
 
+// Seen on Chrome 157 (test-log Finding 9): a stuck session can keep sending result events
+// that repeat the same words. Only words that change count as progress.
+test('result events that repeat the same text are not progress', () => {
+  const w = createStallWatch(opts);
+  let asked = 0;
+  for (let t = 0; t <= 4500; t += 100) {
+    if (t === 900) w.onResult(t, 'hello I want');
+    if (t > 900 && t % 300 === 0) w.onResult(t, 'hello I want');   // the same words again and again
+    if (w.sample(0.1, t)) asked++;
+  }
+  assert.equal(asked, 1);
+});
+
+test('text that keeps changing is progress', () => {
+  const w = createStallWatch(opts);
+  for (let t = 0; t <= 6000; t += 100) {
+    if (t >= 900 && t % 300 === 0) w.onResult(t, 'word '.repeat(t / 300));
+    assert.equal(w.sample(0.1, t), false, `t=${t}`);
+  }
+});
+
+// Review 2026-11-20 (B5): if the speech service silently returns nothing, the page kept
+// restarting without telling the agent. Three restarts in a row with no progress in
+// between mean the service is not responding.
+test('three restarts in a row without progress mark the lane as stuck; new words clear it', () => {
+  const w = createStallWatch(opts);
+  const asks = [];
+  for (let t = 0; t <= 20000; t += 100) if (w.sample(0.1, t)) asks.push(t);
+  assert.deepEqual(asks, [3000, 11000, 19000]);
+  assert.equal(w.stuck, true);
+  w.onResult(20100, 'hello again');
+  assert.equal(w.stuck, false);
+});
+
+test('two fruitless restarts are not yet stuck', () => {
+  const w = createStallWatch(opts);
+  for (let t = 0; t <= 12000; t += 100) w.sample(0.1, t);
+  assert.equal(w.stuck, false);
+});
+
 test('slow first results (up to 3 s) are not mistaken for a stall', () => {
   const w = createStallWatch(opts);
   for (let t = 0; t <= 4000; t += 100) {

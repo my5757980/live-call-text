@@ -8,12 +8,14 @@ import { createSilenceWatch } from './core/silence-watch.js';
 import { createPauseFinalizer } from './core/pause-finalizer.js';
 import { createStallWatch } from './core/stall-watch.js';
 import { createEchoFilter } from './core/echo-filter.js';
+import { createSpeechOverlap } from './core/speech-overlap.js';
 import { createLinkSession } from './core/link-session.js';
 import { buildCallRecord } from './core/record.js';
 import { createRelayClient } from './browser/relay-client.js';
 import { startCallCapture, onTrackEnded, getMicrophone } from './browser/capture.js';
 import { createAudioPath } from './browser/audio-graph.js';
 import { createLaneRunner } from './browser/recognizer.js';
+import { startTicker } from './browser/ticker.js';
 import * as render from './browser/render.js';
 
 const byId = (id) => document.querySelector(`[data-testid="${id}"]`);
@@ -48,7 +50,7 @@ const METER_INTERVAL_MS = 100;
 const CLEARED_ON_START = [
   'E_SHARE_CANCELLED', 'E_NO_CALL_SOUND_SCREEN', 'E_NO_CALL_SOUND_WINDOW', 'E_NO_CALL_SOUND_TAB',
   'I_SHARING_STOPPED', 'W_MIC_BLOCKED', 'W_MIC_MISSING', 'W_NO_INTERNET', 'W_SPEECH_SERVICE',
-  'I_LINK_COPIED', 'W_LINK_UNAVAILABLE', 'I_CHAT_SAVED',
+  'I_LINK_COPIED', 'W_LINK_UNAVAILABLE', 'W_LINK_COPY_FAILED', 'I_CHAT_SAVED',
 ];
 
 function storage() {
@@ -82,20 +84,32 @@ function listeningStatus() {
   return reason ? { state: 'paused', pauseReason: reason } : { state: 'listening', source: call.source };
 }
 
+// "Speech service not responding": a lane paused for it, or sessions that keep going quiet
+// while someone speaks (core/stall-watch.js `stuck`).
+function speechServiceDown() {
+  const stuck = Object.values(call?.stalls ?? {}).some((w) => w.stuck);
+  return stuck || Object.values(laneReasons).includes('speech-service');
+}
+
 function onLaneState(side, lane) {
   laneReasons[side] = lane.state === 'paused' ? lane.pauseReason : null;
   const reasons = Object.values(laneReasons);
   toggle('W_NO_INTERNET', reasons.includes('no-internet'));
-  toggle('W_SPEECH_SERVICE', reasons.includes('speech-service'));
+  toggle('W_SPEECH_SERVICE', speechServiceDown());
   showMessages();
   if (call && side === 'customer') setStatus(listeningStatus());
 }
 
 function onResult(callId, result) {
+  // A session that is being stopped can still hand over its last words. If the agent has
+  // already pressed New call, they must not land in the fresh conversation.
+  if (!transcript.hasCall(callId)) return;
   const live = call?.id === callId ? call : null;
   if (live) {
-    live.finalizers[result.side]?.onResult(result);
-    live.stalls[result.side]?.onResult(performance.now());
+    const t = performance.now();
+    live.finalizers[result.side]?.onResult(result, t);
+    // Only words that change count as progress for the stall watch (test-log Finding 9).
+    live.stalls[result.side]?.onResult(t, `${result.session}:${result.resultIndex}:${result.text}`);
   }
   const now = Date.now();
   const { changed } = transcript.applyResult({ callId, ...result, at: now });
@@ -105,7 +119,7 @@ function onResult(callId, result) {
       recheckAgentEcho(callId);
     } else {
       agentLastAt.set(line.id, now);
-      if (!line.echo && sameLanguage() && echo.isEcho(line, now)) line = transcript.markEcho(line.id);
+      if (!line.echo && isAgentEcho(line, now)) line = transcript.markEcho(line.id);
     }
     render.renderLine(el.transcript, line);
     if (line.side === 'agent' && live) sendAgentLine(live, line);
@@ -120,43 +134,71 @@ function onResult(callId, result) {
 // ---------- Echo filter (FR-038) ----------
 
 const ECHO_HOLD_MS = 1500;       // ...for this long after the sound
-const ECHO_SEND_DELAY_MS = 1200; // a final Agent line waits this long while the customer talks
+const ECHO_SEND_DELAY_MS = 2000; // a possible echo's final line waits this long, then is checked again
+const ECHO_MAYBE_MS = 4000;      // with too little Agent speech to judge, customer speech this recent counts
+const ECHO_MIN_OVERLAP = 0.3;    // the same share core/echo-filter.js uses
 const ECHO_RECHECK_MS = 6000;    // Agent lines this recent are re-checked on customer updates
+const ECHO_LEAD_MS = 2000;       // a line's first words appear up to about 2 s after they are spoken
 let echo = createEchoFilter();
+let overlap = createSpeechOverlap();
 const agentLastAt = new Map();   // Agent line id -> last update time
 let customerSoundUntil = 0;
 
 // Echo can only be recognised as the same words when both sides use one language.
 const sameLanguage = () => el.customerLang.value === el.agentLang.value;
 
+// Echo reaches the microphone while the customer is speaking. An agent who says the
+// customer's words back afterwards overlaps very little, and is not echo.
+function isAgentEcho(line, lastAt) {
+  if (!sameLanguage()) return false;
+  return echo.isEcho(line, lastAt, overlap.ratio(line.at - ECHO_LEAD_MS, lastAt).ratio);
+}
+
 function recheckAgentEcho(callId) {
   if (!sameLanguage()) return;
   const now = Date.now();
   for (const line of transcript.getLines(callId)) {
     if (line.side !== 'agent' || line.echo || now - line.at > ECHO_RECHECK_MS) continue;
-    if (echo.isEcho(line, agentLastAt.get(line.id) ?? line.at)) {
+    if (isAgentEcho(line, agentLastAt.get(line.id) ?? line.at)) {
       render.renderLine(el.transcript, transcript.markEcho(line.id));
     }
   }
 }
 
-// Only the agent's own words go to the customer link (FR-026), never their echo.
-// While the customer is talking, in-progress Agent words wait and finals are checked again
-// shortly before sending.
+// Whether an Agent line could still turn out to be echo: the customer is talking now, or
+// the agent's words were spoken while the customer was speaking. The words of such a line
+// can arrive late (a new recognition session, a slow result), after the customer's words
+// that would show it is echo.
+function mayBeEcho(line) {
+  if (!sameLanguage()) return false;
+  const now = Date.now();
+  if (now < customerSoundUntil) return true;
+  const share = overlap.ratio(line.at - ECHO_LEAD_MS, now).ratio;
+  if (share === null) return now - (customerSoundUntil - ECHO_HOLD_MS) < ECHO_MAYBE_MS;
+  return share >= ECHO_MIN_OVERLAP;
+}
+
+// Only the agent's own words go to the customer link (FR-026), never their echo. The
+// in-progress words of a possible echo are not sent; its final line waits 2 s and is
+// checked again against everything the customer has said by then.
 function sendAgentLine(c, line) {
   if (!c.link || line.echo) return;
-  const mayBeEcho = sameLanguage() && Date.now() < customerSoundUntil;
   clearTimeout(c.pendingSends.get(line.id));
   const send = (l) => c.link?.client.sendCaption({ id: l.id, text: l.text, final: l.final, lang: l.lang });
-  if (!mayBeEcho) {
+  if (!mayBeEcho(line)) {
     send(line);
     return;
   }
   if (!line.final) return;
   c.pendingSends.set(line.id, setTimeout(() => {
     c.pendingSends.delete(line.id);
-    const latest = transcript.getLines(c.id).find((l) => l.id === line.id);
-    if (latest && !latest.echo && call === c) send(latest);
+    let latest = transcript.getLines(c.id).find((l) => l.id === line.id);
+    if (!latest || call !== c) return;
+    if (!latest.echo && isAgentEcho(latest, agentLastAt.get(latest.id) ?? latest.at)) {
+      latest = transcript.markEcho(latest.id);
+      render.renderLine(el.transcript, latest);
+    }
+    if (!latest.echo) send(latest);
   }, ECHO_SEND_DELAY_MS));
 }
 
@@ -164,17 +206,19 @@ function sendAgentLine(c, line) {
 
 const LINK_SHOWS_URL = ['connecting', 'live', 'reconnecting'];
 const FLASH_MS = 4000;
+const FLASH_WARNING_MS = 8000;   // a warning needs longer to read
 const flashTimers = new Map();
 
-// Shows a short confirmation (I_LINK_COPIED, I_CHAT_SAVED) for a few seconds.
-function flash(code) {
+// Shows a short answer to what the agent just pressed (I_LINK_COPIED, I_CHAT_SAVED,
+// W_LINK_COPY_FAILED) for a few seconds.
+function flash(code, ms = FLASH_MS) {
   active.add(code);
   showMessages();
   clearTimeout(flashTimers.get(code));
   flashTimers.set(code, setTimeout(() => {
     active.delete(code);
     showMessages();
-  }, FLASH_MS));
+  }, ms));
 }
 
 function renderLink(link) {
@@ -209,12 +253,17 @@ async function onCopyLink() {
     c.link = { session, state: 'connecting', client: null };
     c.link.client = createRelayClient({ origin: location.origin, session, onState: (s) => onLinkState(c, s) });
     renderLink(c.link);
+  } else {
+    c.link.client.retry();   // if the link gave up after a long outage, try again now
   }
   try {
     await navigator.clipboard.writeText(c.link.session.url);
+    active.delete('W_LINK_COPY_FAILED');
     flash('I_LINK_COPIED');
   } catch {
-    // Clipboard blocked: the link stays visible in link-status for copying by hand.
+    // Chrome refused: the link stays on screen in link-status for copying by hand.
+    active.delete('I_LINK_COPIED');
+    flash('W_LINK_COPY_FAILED', FLASH_WARNING_MS);
   }
 }
 
@@ -303,7 +352,8 @@ function beginCall(capture, source) {
   renderLink(null);
   setStatus({ state: 'listening', source });
   call.lanes.customer.start();
-  call.meterTimer = setInterval(tickMeters, METER_INTERVAL_MS);
+  // Ticks from a worker, so the checks keep their pace while the page is hidden.
+  call.stopTicker = startTicker(tickMeters, METER_INTERVAL_MS);
   if (isLocal) window.__lct.state.capture = capture;
   updateChatButtons();
   startAgentSide(call);
@@ -312,14 +362,18 @@ function beginCall(capture, source) {
 // The agent's own words (User Story 2). Runs after the call is already listening, so a
 // missing or blocked microphone never delays or stops customer captions (FR-017).
 async function startAgentSide(c) {
+  if (c.micStarting || c.lanes.agent) return;
+  c.micStarting = true;
   const mic = await getMicrophone();
+  c.micStarting = false;
   if (call !== c) {                       // the call stopped while Chrome was asking
     mic.stream?.getTracks().forEach((t) => t.stop());
     return;
   }
+  toggle('W_MIC_BLOCKED', mic.code === 'W_MIC_BLOCKED');
+  toggle('W_MIC_MISSING', mic.code === 'W_MIC_MISSING');
+  showMessages();
   if (mic.code) {
-    active.add(mic.code);
-    showMessages();
     el.meterMic.dataset.state = 'unavailable';
     return;
   }
@@ -336,7 +390,40 @@ async function startAgentSide(c) {
     onDebug: debugLog,
   });
   c.lanes.agent.start();
+  // A headset unplugged during the call ends its track.
+  c.detachMicEnded = onTrackEnded(mic.stream, () => onMicEnded(c));
   el.meterMic.dataset.state = 'on';
+}
+
+function stopAgentSide(c) {
+  c.detachMicEnded?.();
+  c.detachMicEnded = null;
+  c.lanes.agent?.stop();
+  c.paths.agent?.stop();
+  c.micStream?.getTracks().forEach((t) => t.stop());
+  delete c.lanes.agent;
+  delete c.paths.agent;
+  delete c.finalizers.agent;
+  delete c.stalls.agent;
+  c.micStream = null;
+  for (const line of transcript.finalizeOpen(c.id, 'agent')) render.renderLine(el.transcript, line);
+}
+
+// The microphone went away during the call. The Agent side stops and the page says so;
+// customer captions go on (FR-017). The laptop may have another microphone, so the page
+// tries again at once, and again whenever Chrome reports a device change.
+function onMicEnded(c) {
+  stopAgentSide(c);
+  if (call !== c) return;
+  render.renderMeter(el.meterMic, 0);
+  el.meterMic.dataset.state = 'unavailable';
+  active.add('W_MIC_MISSING');
+  showMessages();
+  startAgentSide(c);
+}
+
+function onDeviceChange() {
+  if (call && active.has('W_MIC_MISSING')) startAgentSide(call);
 }
 
 // Pause and stall checks use each side's speech detection (adaptive to background noise)
@@ -357,9 +444,15 @@ function tickMeters() {
   if (call.stalls.customer.sample(customerTalking, now)) call.lanes.customer.restartNow();
   if (call.paths.agent) {
     const agentTalking = call.paths.agent.isSpeech() ? SPEECH : QUIET;
+    overlap.sample({ agent: agentTalking === SPEECH, customer: customerTalking === SPEECH }, Date.now());
     render.renderMeter(el.meterMic, call.paths.agent.getLevel() * METER_SCALE);
     if (call.finalizers.agent.sample(agentTalking, now)) call.lanes.agent.finalizeNow();
     if (call.stalls.agent.sample(agentTalking, now)) call.lanes.agent.restartNow();
+  }
+  const down = speechServiceDown();
+  if (down !== active.has('W_SPEECH_SERVICE')) {
+    toggle('W_SPEECH_SERVICE', down);
+    showMessages();
   }
 }
 
@@ -367,12 +460,14 @@ function stopCall(reason) {
   if (!call) return;
   const c = call;
   call = null;
-  clearInterval(c.meterTimer);
+  c.stopTicker?.();
   c.detachEnded?.();
+  c.detachMicEnded?.();
   c.pendingSends.forEach((timer) => clearTimeout(timer));
   c.link?.client.end();                    // the customer page shows "Call ended" (FR-028)
   el.copyLink.disabled = true;
   active.delete('W_LINK_UNAVAILABLE');
+  active.delete('W_LINK_COPY_FAILED');
   active.delete('I_LINK_COPIED');
   Object.values(c.lanes).forEach((runner) => runner.stop());
   Object.values(c.paths).forEach((path) => path.stop());
@@ -443,6 +538,7 @@ function clearChat() {
   el.transcript.querySelectorAll('[data-testid="call-section"]').forEach((section) => section.remove());
   agentLastAt.clear();
   echo = createEchoFilter();
+  overlap = createSpeechOverlap();
   shown = null;
   renderLink(null);
   updateChatButtons();
@@ -524,6 +620,8 @@ function boot() {
   el.stop.addEventListener('click', () => stopCall('user'));
   el.copyLink.addEventListener('click', onCopyLink);
   window.addEventListener('pagehide', () => stopCall('pagehide'));
+  // A microphone that was missing, or unplugged during the call, may be back.
+  navigator.mediaDevices?.addEventListener?.('devicechange', onDeviceChange);
 
   setStatus({ state: 'ready' });
 

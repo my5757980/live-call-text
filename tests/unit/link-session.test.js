@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
-  createLinkSession, deriveSid, verifyAgent, isValidSid, toBase64Url, MAX_AGE_MS, SKEW_MS,
+  createLinkSession, deriveSid, verifyAgent, isValidSid, sidFromHash, toBase64Url, MAX_AGE_MS, SKEW_MS,
 } from '../../web/js/core/link-session.js';
 
 // Vectors computed once with Node's crypto:
@@ -46,6 +46,16 @@ test('verifyAgent: ok within 4 h, too-old after, future beyond skew, mismatch ot
   assert.deepEqual(await verifyAgent({ ...base, now: V1.created - SKEW_MS - 1 }), { ok: false, reason: 'future' });
   assert.deepEqual(await verifyAgent({ ...base, token: V2.token, now: V1.created }), { ok: false, reason: 'mismatch' });
   assert.deepEqual(await verifyAgent({ ...base, token: 'short', now: V1.created }), { ok: false, reason: 'mismatch' });
+});
+
+// Review 2026-11-12 (B9): a damaged link made decodeURIComponent throw, and the customer
+// page stayed on "Connecting..." for ever.
+test('sidFromHash reads the session id from the link, or gives null', () => {
+  assert.equal(sidFromHash(`#${V1.sid}`), V1.sid);
+  assert.equal(sidFromHash(V1.sid), V1.sid);
+  for (const bad of ['', '#', '#not-a-real-id', '#%E0%A4%A', `#${V1.sid}x`, null, undefined]) {
+    assert.equal(sidFromHash(bad), null, String(bad));
+  }
 });
 
 test('isValidSid accepts exactly 22 base64url characters', () => {

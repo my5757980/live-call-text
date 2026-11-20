@@ -76,6 +76,9 @@ Urdu:
    two windows side by side.
 2. Set Customer = English and Agent = Urdu. Press Start, pick the WhatsApp tab, keep "Also share tab
    audio" on, then Share. Time it: captions must be running in 15 s or less (SC-001).
+   If the Call sound meter stays flat once the call is talking, the WhatsApp call is playing from
+   another window: press Stop, then Start, and pick "Entire screen" with "Also share system audio".
+   Note which way worked.
 3. Start a WhatsApp call with the "customer". The agent must hear the customer exactly as normal
    (FR-004).
 4. The customer reads the English sentences. At least 9 of the 10 test sentences overall must be
@@ -89,12 +92,17 @@ Urdu:
 8. Press Stop. The phone must show "Call ended" within 5 s (FR-028). Opening the link again must show
    "not valid".
 9. Turn Wi-Fi off for 30 s, then on again. Captions must continue by themselves within 5 s (SC-005).
-10. Minimise the Live Call Text window for 30 s while the customer talks, then restore it. Note
-    whether the customer's words from those 30 s appeared (research R11; this cannot be checked
-    automatically).
+10. Minimise the Live Call Text window for 30 s while the customer talks, then restore it. The
+    customer's words from those 30 s must be there (research R11, Finding 10). Then keep WhatsApp
+    in front of it for 6 minutes during the call and check again.
 11. After Stop, press **Save chat**. Open the file in Downloads and check that every line is there
     with time and speaker. Press **New call**: the conversation must be empty. Start a call, stop
     it without saving, and press Start: the page must ask "Save this call first?" (User Story 4).
+12. Unplug the headset during the call: the page must say the microphone is missing and the
+    customer's words must keep coming. Plug it back in: "Agent" lines must start again by
+    themselves (FR-017).
+13. Say back a number the customer just said ("0300 1234567, theek hai?"). It must show as an
+    Agent line, also on the customer's phone (FR-038).
 
 ### B. WhatsApp Desktop app
 
@@ -122,7 +130,7 @@ no agent action (SC-004).
 
 ### Results
 
-| Call type | Date | Tester | 1-9 / extra | Result | Notes |
+| Call type | Date | Tester | 1-13 / extra | Result | Notes |
 |---|---|---|---|---|---|
 | WhatsApp Web | | | | | |
 | WhatsApp Desktop | | | | | |

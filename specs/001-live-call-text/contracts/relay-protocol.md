@@ -15,7 +15,16 @@ customer pages and stores nothing (Constitution V, FR-034).
 | `/ws?role=agent&sid=<sid>` | GET with `Upgrade: websocket` | Agent socket |
 | `/ws?role=viewer&sid=<sid>` | GET with `Upgrade: websocket` | Customer socket |
 
-`sid` matches `^[A-Za-z0-9_-]{22}$`. Any other `/ws` request gets HTTP 400.
+`sid` matches `^[A-Za-z0-9_-]{22}$`. The Worker checks every `/ws` request before it wakes the hub
+(added 2026-11-20, FR-042):
+
+| Check | On failure |
+|---|---|
+| `Upgrade: websocket` header | HTTP 426 |
+| `role` is `agent` or `viewer`, and `sid` is well formed | HTTP 400 |
+| An `Origin` header, when present, names this same host | HTTP 403 (another website, or a sandboxed page with `Origin: null`) |
+
+Requests without an `Origin` header are not from a browser page and are allowed (tests, tools).
 
 ## Agent socket
 
@@ -49,7 +58,8 @@ does not get its own captions echoed back.
    sockets have no token, because they can only receive.
 2. The relay accepts the upgrade and tags the socket `viewer` and `viewer:<sid>`. Then:
    - If a live agent socket exists for the sid and fewer than 5 viewers are connected, it sends
-     `{"t":"status","state":"live"}`.
+     `{"t":"status","state":"live"}`. A call counts as live only while its link is under 4 hours
+     old (FR-029).
    - Otherwise it sends `{"t":"status","state":"invalid"}` and closes with **4404**. Too many viewers
      closes with **4009**.
 3. Viewers receive only what is sent after they join (FR-026). The relay keeps no history.
@@ -82,7 +92,8 @@ does not get its own captions echoed back.
 | `lang` | `ur-PK` or `en-US` | Drop the frame |
 | Agent rate | ≤ 5 frames per second | Drop the extra frames |
 | Viewers per sid | ≤ 5 | Close the new viewer with 4009 |
-| Viewer sending anything other than `ping` | — | Ignore it |
+| Viewer sending anything other than `ping` | — | Drop it; close with 4008 on the 3rd frame |
+| Agent flooding | > 50 frames in one second | Close with 4008 |
 
 ### Close codes
 
@@ -91,7 +102,7 @@ does not get its own captions echoed back.
 | 1000 | Normal close |
 | 4000 | Call ended |
 | 4001 | Link expired (4 h) |
-| 4008 | Too many invalid frames |
+| 4008 | Too many invalid frames, a viewer that sends, or an agent that floods |
 | 4009 | Too many viewers |
 | 4010 | Agent socket replaced by a newer connection from the same agent (ignored by the close handler) |
 | 4404 | Invalid or ended link |
@@ -102,7 +113,8 @@ does not get its own captions echoed back.
 |---|---|---|
 | Agent words on the customer's phone | ≤ 3 s after being spoken | SC-009 |
 | `ended` on the customer page after Stop | ≤ 5 s | FR-028 |
-| Agent reconnect window | 60 s | R7 |
+| Agent reconnect window | 60 s, then the agent page stops trying until Copy customer link is pressed again | R7, FR-031 |
+| Waiting final lines after a reconnect | Sent one by one, about 2.5 per second, in order | Review 2026-11-20 (the relay drops more than 5 per second) |
 
 ## Compatibility
 

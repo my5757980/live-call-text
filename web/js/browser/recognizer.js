@@ -1,6 +1,6 @@
 // Runs Chrome's SpeechRecognition for one side of the call, fed by an audio track
 // (research.md R1, R5). Restart, pause and retry decisions come from core/lane-policy.js.
-import { decide, initialLane, HEALTHY_AFTER_MS } from '../core/lane-policy.js';
+import { decide, initialLane, HEALTHY_AFTER_MS, QUICK_END_MS } from '../core/lane-policy.js';
 import { summarizeResults } from '../core/transcript.js';
 
 // If Chrome never sends `end` after abort()/stop() (seen when abort() comes before the
@@ -25,7 +25,10 @@ export function createLaneRunner({ side, track, lang, onResult, onState, onDebug
   function apply(event) {
     const d = decide(lane, event);
     debug('decide', { ev: event.type, err: event.error, action: d.action, delay: d.delayMs, state: d.state });
-    lane = { state: d.state, retryStep: d.retryStep, pauseReason: d.pauseReason, lang: d.lang, offline: d.offline };
+    lane = {
+      state: d.state, retryStep: d.retryStep, pauseReason: d.pauseReason, lang: d.lang,
+      offline: d.offline, quickEnds: d.quickEnds,
+    };
     report(d.message);
     if (d.action === 'restart') restart(d.delayMs);
     else if (d.action === 'stop') teardown();
@@ -51,17 +54,31 @@ export function createLaneRunner({ side, track, lang, onResult, onState, onDebug
     }, END_WATCHDOG_MS);
   }
 
+  // A new session starts right after the current task, not on a timer: Chrome slows the
+  // timers of a hidden page to once a second, and the customer's first words would fall
+  // into that gap.
+  let startQueued = false;
+  function startSoon() {
+    if (startQueued) return;
+    startQueued = true;
+    queueMicrotask(() => {
+      startQueued = false;
+      startNow();
+    });
+  }
+
   function restart(delayMs) {
     clearTimeout(timer);
     if (running) {
       endForRestart('abort');
       return;
     }
-    timer = setTimeout(startNow, delayMs);
+    if (delayMs > 0) timer = setTimeout(startNow, delayMs);
+    else startSoon();
   }
 
   function startNow() {
-    if (stopped) return;
+    if (stopped || running) return;   // never two sessions at once
     if (track.readyState !== 'live') {
       apply({ type: 'error', error: 'audio-capture', trackEnded: true });
       return;
@@ -73,6 +90,8 @@ export function createLaneRunner({ side, track, lang, onResult, onState, onDebug
     rec.interimResults = true;
     rec.maxAlternatives = 1;
     const mySession = ++session;
+    const startedAt = Date.now();
+    let gotResult = false;
     // Chrome sometimes ends a session (our stop(), a silent failure) without sending a
     // final for the text it had shown as in progress. That text is kept as final.
     let pending = null;
@@ -103,6 +122,7 @@ export function createLaneRunner({ side, track, lang, onResult, onState, onDebug
     };
     rec.onresult = (e) => {
       if (recognition !== rec) return;
+      gotResult = true;
       sendHealthy();
       const { finals, interim } = summarizeResults(e.results, e.resultIndex);
       debug('result', { from: e.resultIndex, total: e.results.length, finals: finals.length, interim: interim ? interim.text.slice(-30) : null, finalText: finals.map((x) => x.text.slice(-30)).join(' | ') });
@@ -132,10 +152,12 @@ export function createLaneRunner({ side, track, lang, onResult, onState, onDebug
       if (stopped) return;
       if (restartAfterEnd) {
         restartAfterEnd = false;
-        timer = setTimeout(startNow, 0);
+        startSoon();
         return;
       }
-      apply({ type: 'end' });
+      // A session that ends within a second with nothing heard did not work; the policy
+      // retries those more slowly and pauses the lane if it keeps happening.
+      apply({ type: 'end', quick: !gotResult && Date.now() - startedAt < QUICK_END_MS });
     };
 
     recognition = rec;

@@ -36,7 +36,12 @@ docs fetched on 2026-10-03 (sources at the end), and recorded-audio tests run on
   ```js
   navigator.mediaDevices.getDisplayMedia({
     video: true,                                   // required by the API
-    audio: { suppressLocalAudioPlayback: false },  // the agent keeps hearing the call (FR-004)
+    audio: {
+      suppressLocalAudioPlayback: false,           // the agent keeps hearing the call (FR-004)
+      echoCancellation: false,                     // added 2026-11-13, see below
+      noiseSuppression: false,
+      autoGainControl: false,
+    },
     systemAudio: 'include',                        // offer "Also share system audio" for screens
     windowAudio: 'window',                         // hint only; see below
     selfBrowserSurface: 'exclude',                 // our own tab is not offered
@@ -60,6 +65,12 @@ docs fetched on 2026-10-03 (sources at the end), and recorded-audio tests run on
     this is untested.
   - The 2026-10-02 test used `suppressLocalAudioPlayback: true` to stay silent. Production MUST use
     `false`.
+- **Update 2026-11-13 (test-log Finding 9)**: Chrome 157 applies its call processing to captured
+  call sound by default, and its echo cancellation drops 10 ms pieces of it, which cut English
+  text mid-sentence. The capture now asks for `echoCancellation`, `noiseSuppression` and
+  `autoGainControl` all `false` (FR-043). The page's own gain (R3) evens out the level.
+- **Update 2026-11-16 (test-log Finding 11)**: right after sharing starts, the video track is set to
+  `frameRate: 1`. That cut Chrome's CPU by about a third; stopping the video track saved nothing.
 - **Rationale**: This is the only browser path to tab or system sound. Chrome's picker gives exactly
   "one Start plus the share choice" (IV). The API needs a secure context and a user click (MDN), so
   it is called from the Start handler and the pages are served over HTTPS (or localhost).
@@ -110,6 +121,12 @@ docs fetched on 2026-10-03 (sources at the end), and recorded-audio tests run on
   - On this laptop (Chrome 154, Windows) the mic reports capabilities `[true, false,
     "remote-only"]`, so `"all"` is not available and Chrome uses normal echo cancellation.
   - **Practical fix**: a headset or earphones (FR-023 reminder; spec edge case "No headset").
+- **Update 2026-11-16 (review)**:
+  - A microphone track that ends during a call (headset unplugged) shows W_MIC_MISSING; the page
+    tries again at once and on every `devicechange` event (FR-017 amended).
+  - The echo filter also needs the two sides to have spoken at the same time: an Agent line is
+    echo only if at least 30% of the agent's speaking time overlapped the customer's
+    (`core/speech-overlap.js`). An agent repeating the customer afterwards is shown.
   - Source: Chrome 141 beta blog, https://developer.chrome.com/blog/chrome-141-beta
 
 ## R5. Recognition lifecycle and recovery
@@ -119,7 +136,7 @@ docs fetched on 2026-10-03 (sources at the end), and recorded-audio tests run on
 
   | Event | Action |
   |---|---|
-  | `end` while not stopped | Restart within 250 ms |
+  | `end` while not stopped | Restart at once (was 250 ms; changed 2026-11-16). A session that ended within 1 s with nothing heard retries after 0.5 s, 1 s, then pauses with "speech service not responding" |
   | `no-speech`, or `aborted` that the page did not cause | Restart |
   | `network`, or the `offline` event | Pause with "No internet". Retry after 0.5 s, 1 s, 2 s, then every 3 s; retry at once on `online` (SC-005, 5 s or less) |
   | `audio-capture` | If the track has ended, treat it as "sharing stopped"; otherwise retry |
@@ -147,6 +164,14 @@ docs fetched on 2026-10-03 (sources at the end), and recorded-audio tests run on
     as a final line.
 - **Rationale**: Chrome's continuous recognition stops by itself after silences and time limits.
   Restarting automatically meets FR-016 and SC-004.
+- **Update 2026-11-16/20 (review)**:
+  - The pause finalizer also watches the text: it never ends a session while the in-progress text
+    is still changing, and waits for the text to rest 1 s after the sound stops (2 s when no
+    sound was detected at all, as on a noisy line where the speech check misses the speaker).
+  - The stall watch counts only changing text as progress; a stuck session can keep sending the
+    same words (Finding 9).
+  - A new session starts in a microtask, not on a timer, so a hidden page (timers once a second)
+    leaves no gap.
 
 ## R6. Customer-link relay and hosting
 
@@ -303,6 +328,13 @@ link is not available right now" (FR-031), and captions keep working (II).
   `fixme`.
 - The check moved to the real-call checklist (quickstart §5A step 10), and the guide keeps the page
   in a visible window.
+- **Measured 2026-11-20 (test-log Finding 10)** with a normal Chrome window driven over the DevTools
+  protocol instead of Playwright: with the agent tab hidden, captions kept arriving and Urdu
+  finals came, but Chrome ran the page's own timers only once a second. The 100 ms checks and the
+  gain now tick from a dedicated worker (`browser/ticker.js`), which keeps its pace: 500 loop runs
+  in 50 s while hidden. Chrome's "once a minute" throttling after 5 hidden minutes did not appear
+  with its wait shortened to 10 s; the worker covers it either way. Real-call checklist step 10
+  stays.
 
 ## Sources
 

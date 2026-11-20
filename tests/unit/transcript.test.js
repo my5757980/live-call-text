@@ -83,6 +83,29 @@ test('finalizeOpen makes every in-progress line of a call final', () => {
   assert.ok(t.getLines('c').every((l) => l.final));
 });
 
+// Review 2026-11-12 (B4): when the microphone goes away mid-call only the Agent side
+// ends; the customer's in-progress line must keep updating.
+test('finalizeOpen can end one side only', () => {
+  const t = createTranscript();
+  t.startCall({ id: 'c', startedAt: 0 });
+  t.applyResult(r('c', 'customer', 1, 0, 'still talk', false, 1));
+  t.applyResult(r('c', 'agent', 1, 0, 'my last words', false, 2));
+  assert.deepEqual(t.finalizeOpen('c', 'agent').map((l) => [l.side, l.final]), [['agent', true]]);
+  const { line } = t.applyResult(r('c', 'customer', 1, 0, 'still talking', false, 3));
+  assert.deepEqual([line.text, line.final], ['still talking', false]);
+});
+
+// A session that is being stopped can still hand over its last words. If the agent has
+// already pressed New call, those words must not land in the fresh conversation.
+test('hasCall knows the calls on screen', () => {
+  const t = createTranscript();
+  t.startCall({ id: 'call-1', startedAt: 0 });
+  assert.equal(t.hasCall('call-1'), true);
+  assert.equal(t.hasCall('call-2'), false);
+  t.clear();
+  assert.equal(t.hasCall('call-1'), false);
+});
+
 test('clear forgets every call and line (New call, FR-040)', () => {
   const t = createTranscript();
   t.startCall({ id: 'call-1', startedAt: 0 });

@@ -13,14 +13,21 @@ export const MESSAGES = Object.freeze({
   W_MIC_MISSING: { level: 'warning', text: 'No microphone found. Plug in your headset to see your own words. Customer text still works.' },
   W_NO_INTERNET: { level: 'warning', text: 'No internet - captions paused. They will continue by themselves.' },
   W_SPEECH_SERVICE: { level: 'warning', text: 'Speech service is not responding - captions paused. Trying again...' },
-  H_NO_CALL_SOUND: { level: 'hint', text: "No call sound heard yet. Check that you shared the call tab, or that your headset is the laptop's default sound device." },
+  H_NO_CALL_SOUND: { level: 'hint', text: "No call sound heard yet. If the customer is already talking, press Stop, then Start again and choose 'Entire screen' with 'Also share system audio'. Also check that your headset is the laptop's default sound device." },
   I_LINK_COPIED: { level: 'info', text: 'Link copied - paste it in the chat.' },
   W_LINK_UNAVAILABLE: { level: 'warning', text: 'Customer link is not available right now.' },
+  W_LINK_COPY_FAILED: { level: 'warning', text: 'The link could not be copied. Select the link shown below and copy it by hand.' },
   I_CHAT_SAVED: { level: 'info', text: 'Chat saved to your Downloads folder.' },
 });
 
 export const HEADSET_REMINDER = "Use a headset, so the customer's voice doesn't reach your microphone.";
-export const PRIVACY_LINE = 'Speech is sent to Google through Chrome to turn it into text. Nothing is recorded.';
+// Save chat keeps the words as text on the agent's laptop, so the pages only promise
+// what is always true: the call's audio is never recorded.
+export const PRIVACY_LINE = 'Speech is sent to Google through Chrome to turn it into text. Call audio is never recorded.';
+export const VIEWER_NOTE = Object.freeze({
+  en: "Only the agent's words are shown here. Call audio is never recorded.",
+  ur: 'یہاں صرف ایجنٹ کی بات دکھائی جاتی ہے۔ کال کی آواز کبھی ریکارڈ نہیں ہوتی۔',
+});
 
 export const VIEWER_LABELS = Object.freeze({
   connecting: { en: 'Connecting...', ur: 'رابطہ ہو رہا ہے...' },
@@ -31,10 +38,12 @@ export const VIEWER_LABELS = Object.freeze({
   invalid: { en: 'This call has ended or the link is not valid', ur: 'یہ کال ختم ہو چکی ہے یا لنک درست نہیں ہے' },
 });
 
-// After any E_* code, the message area shows the first active code in this order.
+// After any E_* code, the message area shows the first active code in this order. The
+// short confirmations come before the warnings that stay for the whole call, so the agent
+// always sees the answer to what they just pressed.
 const PRIORITY = [
-  'W_NO_INTERNET', 'W_SPEECH_SERVICE', 'W_LINK_UNAVAILABLE', 'W_MIC_BLOCKED',
-  'W_MIC_MISSING', 'I_SHARING_STOPPED', 'I_LINK_COPIED', 'I_CHAT_SAVED',
+  'W_NO_INTERNET', 'W_SPEECH_SERVICE', 'W_LINK_UNAVAILABLE', 'W_LINK_COPY_FAILED',
+  'I_LINK_COPIED', 'I_CHAT_SAVED', 'W_MIC_BLOCKED', 'W_MIC_MISSING', 'I_SHARING_STOPPED',
 ];
 
 export function messageFor(code) {

@@ -70,16 +70,19 @@ export function createTranscript() {
     return copy(line);
   }
 
-  function finalizeOpen(callId) {
+  // Makes the in-progress lines of a call final: both sides, or one side only.
+  function finalizeOpen(callId, side) {
     const changed = [];
     for (const [key, id] of open) {
-      if (key.startsWith(`${callId}:`)) {
+      if (side ? key === `${callId}:${side}` : key.startsWith(`${callId}:`)) {
         finalize(id, changed);
         open.delete(key);
       }
     }
     return changed;
   }
+
+  const hasCall = (id) => calls.some((c) => c.id === id);
 
   function getLines(callId) {
     return [...lines.values()]
@@ -90,7 +93,7 @@ export function createTranscript() {
 
   const getCalls = () => calls.map((c) => ({ ...c }));
 
-  return { startCall, applyResult, markEcho, finalizeOpen, getLines, getCalls, clear };
+  return { startCall, applyResult, markEcho, finalizeOpen, getLines, getCalls, hasCall, clear };
 }
 
 // Turns one SpeechRecognition result event into new final results plus one merged

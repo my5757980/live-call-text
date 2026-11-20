@@ -1,0 +1,8 @@
+# Response headers for the pages (Workers Static Assets reads this file; it is not served).
+# The pages load only their own scripts and styles, talk only to their own relay, and
+# cannot be shown inside another site's frame.
+/*
+  Content-Security-Policy: default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'self' ws: wss:; base-uri 'none'; form-action 'none'; frame-ancestors 'none'
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Referrer-Policy: no-referrer

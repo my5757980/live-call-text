@@ -8,6 +8,7 @@ const RETRY_MS = 2000;
 
 export function connectViewer({ origin, sid, onStatus, onCaption, WebSocketImpl = WebSocket }) {
   const url = `${origin.replace(/^http/, 'ws')}/ws?role=viewer&sid=${encodeURIComponent(sid)}`;
+  let ws = null;
   let state = 'connecting';
   let hasCaption = false;
   let pausedTimer = null;
@@ -19,7 +20,11 @@ export function connectViewer({ origin, sid, onStatus, onCaption, WebSocketImpl 
     if (final() || state === next) return;
     state = next;
     if (next !== 'paused') clearTimeout(pausedTimer);
-    if (final()) clearInterval(pingTimer);
+    if (final()) {
+      // Ended means ended: stop listening, so nothing can appear under "Call ended".
+      clearInterval(pingTimer);
+      try { ws?.close(); } catch { /* already closed */ }
+    }
     onStatus?.(next);
   };
 
@@ -30,14 +35,16 @@ export function connectViewer({ origin, sid, onStatus, onCaption, WebSocketImpl 
   }
 
   function connect() {
-    const ws = new WebSocketImpl(url);
-    ws.onopen = () => {
+    if (final()) return;
+    const socket = new WebSocketImpl(url);
+    ws = socket;
+    socket.onopen = () => {
       downSince = null;
       clearInterval(pingTimer);
-      pingTimer = setInterval(() => { if (ws.readyState === 1) ws.send('ping'); }, PING_MS);
+      pingTimer = setInterval(() => { if (socket.readyState === 1) socket.send('ping'); }, PING_MS);
     };
-    ws.onmessage = (e) => {
-      if (e.data === 'pong') return;
+    socket.onmessage = (e) => {
+      if (final() || e.data === 'pong') return;
       const parsed = parseViewerFrame(e.data);
       if (!parsed.ok) return;
       const msg = parsed.msg;
@@ -55,7 +62,7 @@ export function connectViewer({ origin, sid, onStatus, onCaption, WebSocketImpl 
         set('invalid');
       }
     };
-    ws.onclose = (e) => {
+    socket.onclose = (e) => {
       clearInterval(pingTimer);
       if (final()) return;
       if (e.code === 4404) { set('invalid'); return; }

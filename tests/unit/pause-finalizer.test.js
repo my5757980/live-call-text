@@ -58,3 +58,46 @@ test('a new in-progress line after finalizing arms it again', () => {
   f.sample(0.1, 2000);
   assert.equal(f.sample(0, 3500), true);
 });
+
+// Review 2026-11-12 (B2): when the level check misses a speaker (line noise), the old rule
+// saw "silence" and ended the session at every new word. The text itself is a second
+// sign of speech: while it is still changing, nobody has paused.
+test('never finalizes while the text is still changing, even if no sound is detected', () => {
+  const f = createPauseFinalizer(opts);
+  f.sample(1, 0);                              // sound was detected once, long ago
+  let asked = 0;
+  for (let t = 2000; t <= 12000; t += 100) {
+    if (t % 300 === 0) f.onResult({ final: false, text: 'word '.repeat(t / 300) }, t);
+    if (f.sample(0, t)) asked++;
+  }
+  assert.equal(asked, 0);
+  assert.equal(f.sample(0, 13900), false);     // 1.9 s after the last new word
+  assert.equal(f.sample(0, 14000), true);      // 2 s of unchanged text
+  assert.equal(f.sample(0, 15000), false);     // only once
+});
+
+test('waits for late words: the text must be unchanged for 1 s after the sound stops', () => {
+  const f = createPauseFinalizer(opts);
+  f.onResult({ final: false, text: 'how many' }, 0);
+  f.sample(0.1, 1000);                         // last sound at 1.0 s
+  f.onResult({ final: false, text: 'how many days' }, 2200);   // late words at 2.2 s
+  assert.equal(f.sample(0, 2500), false);      // 1.5 s of quiet, but the text just changed
+  assert.equal(f.sample(0, 3100), false);
+  assert.equal(f.sample(0, 3200), true);       // 1 s after the last change
+});
+
+test('with no sound ever detected, finalizes 2 s after the text stops changing', () => {
+  const f = createPauseFinalizer(opts);
+  f.onResult({ final: false, text: 'السلام' }, 1000);
+  f.onResult({ final: false, text: 'السلام علیکم' }, 1500);
+  assert.equal(f.sample(0, 3400), false);
+  assert.equal(f.sample(0, 3500), true);
+});
+
+test('the same text again is not a change', () => {
+  const f = createPauseFinalizer(opts);
+  f.sample(0.1, 0);
+  f.onResult({ final: false, text: 'hello' }, 100);
+  f.onResult({ final: false, text: 'hello' }, 1400);   // Chrome repeats the same words
+  assert.equal(f.sample(0, 1500), true);       // 1.5 s quiet, text unchanged since 0.1 s
+});

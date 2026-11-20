@@ -30,6 +30,7 @@
         <li>Live Call Text ko <strong>alag Chrome window</strong> mein kholein aur WhatsApp ya dialer ke saath side-by-side rakhein (<code>Windows</code> + <code>&larr;</code> / <code>&rarr;</code>).</li>
         <li><strong>Customer speaks</strong> mein customer ki zaban chunein, aur <strong>I speak</strong> mein apni. Page ye choice yaad rakhta hai. Call ke beech bhi badal sakte hain.</li>
       </ul>
+      <p class="callout">Pehli dafa test karna ho to <strong>do log</strong> rakhein, alag kamron mein. Ek hi banda dono taraf se bole to us ki awaz dono mic mein jati hai aur text ghalat naam se aata hai.</p>
     </section>
 
     <section class="card">
@@ -41,6 +42,7 @@
         <li><strong>Also share tab audio</strong> on rehne dein, phir <strong>Share</strong> dabayein.</li>
         <li>Status <strong>Listening to a browser tab</strong> ho jayega. Customer ki baat "Customer" ke naam se aayegi.</li>
       </ol>
+      <p class="callout">Agar customer ki baat ka text na aaye, ya <strong>Call sound</strong> ki line na hile: <strong>Stop</strong> dabayein, phir <strong>Start</strong> dabayein aur <strong>Entire screen</strong> ke saath <strong>Also share system audio</strong> chunein (neeche qadam 3). Ye tareeqa har call par chalta hai, WhatsApp ki call alag window mein khuli ho tab bhi.</p>
     </section>
 
     <section class="card">
@@ -63,6 +65,7 @@
         <li>Customer link kholega to us ke phone par aap ki baat live likhi aayegi. Koi app ya sign-up nahi chahiye.</li>
         <li><strong>Stop</strong> dabate hi link band ho jata hai aur customer ko "Call ended" dikhta hai. Har call ka link alag hota hai.</li>
       </ol>
+      <p class="callout">Agar link copy na ho to page bata dega. Phir <strong>Customer link</strong> ke neeche likha hua link select karke khud copy karein. Agar link "not available" ho to thori der baad <strong>Copy customer link</strong> dobara dabayein.</p>
     </section>
 
     <section class="card">
@@ -88,12 +91,13 @@
           <tr><td data-message-code="E_NO_CALL_SOUND_TAB"></td><td>Tab ki awaz band thi. Dobara Start karein aur "Also share tab audio" on rakhein.</td></tr>
           <tr><td data-message-code="I_SHARING_STOPPED"></td><td>Sharing band ho gayi (Stop sharing dabaya ya tab band hui). Start dabayein.</td></tr>
           <tr><td data-message-code="W_MIC_BLOCKED"></td><td>Mic block hai. Address bar ke icon par click karke mic allow karein. Customer ka text chalta rahega.</td></tr>
-          <tr><td data-message-code="W_MIC_MISSING"></td><td>Mic nahi mila. Headset lagayein. Customer ka text chalta rahega.</td></tr>
+          <tr><td data-message-code="W_MIC_MISSING"></td><td>Mic nahi mila, ya call ke beech nikal gaya. Headset lagayein; mic wapas aate hi aap ka text khud chal parega. Customer ka text chalta rahega.</td></tr>
           <tr><td data-message-code="W_NO_INTERNET"></td><td>Internet nahi hai. Text ruk gaya hai; internet aate hi khud chal parega.</td></tr>
           <tr><td data-message-code="W_SPEECH_SERVICE"></td><td>Speech service jawab nahi de rahi. Page khud dobara koshish kar raha hai.</td></tr>
-          <tr><td data-message-code="H_NO_CALL_SOUND"></td><td>Call ki awaz nahi aa rahi. Dekhein ke sahi tab share hui hai, ya headset default sound device hai.</td></tr>
+          <tr><td data-message-code="H_NO_CALL_SOUND"></td><td>Call ki awaz nahi aa rahi. Agar customer bol raha hai to Stop dabayein, phir Start dabayein aur Entire screen + system audio chunein. Dialer ke liye headset default sound device hona chahiye.</td></tr>
           <tr><td data-message-code="I_LINK_COPIED"></td><td>Link copy ho gaya. Chat mein paste karein.</td></tr>
-          <tr><td data-message-code="W_LINK_UNAVAILABLE"></td><td>Customer link abhi kaam nahi kar raha. Aap ka text chalta rahega.</td></tr>
+          <tr><td data-message-code="W_LINK_UNAVAILABLE"></td><td>Customer link abhi kaam nahi kar raha. Aap ka text chalta rahega. Thori der baad Copy customer link dobara dabayein.</td></tr>
+          <tr><td data-message-code="W_LINK_COPY_FAILED"></td><td>Link copy nahi ho saka. Customer link ke neeche likha hua link select karke khud copy karein.</td></tr>
           <tr><td data-message-code="I_CHAT_SAVED"></td><td>Chat ki file Downloads folder mein save ho gayi.</td></tr>
         </tbody>
       </table>

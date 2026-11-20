@@ -55,6 +55,7 @@ One side of the call: `customer` (the call audio) or `agent` (the microphone).
 | `lastSoundAt` | number (ms) or `null` | Drives the 20-second hint for the customer side only (FR-008) |
 | `session` | integer | Counts recognizer starts; used in line ids |
 | `offline` | boolean | Set by the window `offline` event, cleared by `online`. While true, a pause is never cleared |
+| `quickEnds` | integer ≥ 0 | Sessions in a row that ended within 1 s with nothing heard. The third pauses the lane with `speech-service`; `healthy` or a normal end resets it (added 2026-11-16) |
 
 **States**:
 
@@ -68,6 +69,7 @@ listening ──1.5 s quiet with an open in-progress line──▶ finalize (sto
 listening ──language changed──▶ starting (new lang, same track)
 any ──Stop / track ended──▶ stopped
 idle (agent side) ──microphone blocked or missing──▶ unavailable   (the customer side is not affected; FR-017)
+listening (agent side) ──microphone track ended──▶ unavailable ──microphone back (devicechange)──▶ starting
 ```
 
 ### CaptionLine
@@ -168,7 +170,7 @@ What the relay derives from these:
 
 | Field | Type | Rules |
 |---|---|---|
-| `sid` | string | Read from `location.hash`. If it is not 22 base64url characters, the page shows `invalid` without connecting |
+| `sid` | string | Read from `location.hash` (`sidFromHash`). If it is missing, damaged or not 22 base64url characters, the page shows `invalid` without connecting. A new hash in the same tab reloads the page |
 | `state` | `connecting`, `waiting`, `live`, `paused`, `ended` or `invalid` | Each state has an English and Urdu label (FR-027) |
 | `lines` | CaptionLine[] (agent only) | Only lines received after the page opened (FR-026) |
 
@@ -178,7 +180,7 @@ What the relay derives from these:
 connecting ──status live──▶ waiting ──first caption──▶ live
 waiting/live ──status paused──▶ paused ──status live──▶ live
 paused ──60 s without live──▶ ended
-any ──status ended / expired, or close 4000 / 4001──▶ ended
+any ──status ended / expired, or close 4000 / 4001──▶ ended   (the page then closes its socket; later frames are ignored)
 connecting ──status invalid, or close 4404──▶ invalid
 ```
 

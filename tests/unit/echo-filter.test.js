@@ -58,3 +58,30 @@ test('needs at least 60% of the agent words in the customer words', () => {
   assert.equal(f.isEcho(agent('a1', 'one two three six seven', 0), 2000), true);    // 3/5
   assert.equal(f.isEcho(agent('a2', 'one two six seven eight', 0), 2000), false);   // 2/5
 });
+
+// Review 2026-11-12 (B1): an agent who repeats the customer's words back ("0300 1234567,
+// theek hai") within a few seconds was hidden as echo, headset or not. Echo is heard by the
+// microphone WHILE the customer speaks; a repeat-back comes after. `overlap` is the share
+// of the agent's speaking time during which the customer was speaking too.
+test('an agent repeating the customer after they stop is not echo', () => {
+  const f = createEchoFilter();
+  const c = cust('c1', 'my number is 0300 1234567', 0);
+  f.noteCustomer(c, 3000);
+  f.noteCustomer(c, 4700);                                   // final after the pause
+  const a = agent('a1', '0300 1234567', 4500);
+  assert.equal(f.isEcho(a, 6000), true);                     // the words alone look like echo
+  assert.equal(f.isEcho(a, 6000, 0.05), false);              // but the mic heard them while the call was quiet
+});
+
+test('real echo is heard while the customer is speaking', () => {
+  const f = createEchoFilter();
+  f.noteCustomer(cust('c1', 'hello I want the price of a Toyota Corolla', 1000), 4000);
+  assert.equal(f.isEcho(agent('a1', 'hello I want the price of Toyota Corolla', 1200), 4200, 0.9), true);
+  assert.equal(f.isEcho(agent('a1', 'hello I want the price of Toyota Corolla', 1200), 4200, 0.5), true);
+});
+
+test('when the overlap is unknown, the words decide', () => {
+  const f = createEchoFilter();
+  f.noteCustomer(cust('c1', 'hello I want the price of a Toyota Corolla', 1000), 4000);
+  assert.equal(f.isEcho(agent('a1', 'hello I want the price of Toyota Corolla', 1200), 4200, null), true);
+});

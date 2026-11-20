@@ -27,12 +27,17 @@ too, and an optional customer link shows the agent's words on the customer's pho
 
 ## Run locally
 
+After cloning, install the tools once. Without this step `npm run dev` fails with
+"'wrangler' is not recognized".
+
 ```powershell
-npm install
+node -v            # must be v24 or newer
+npm install        # once after cloning (and after each pull that changes package.json)
 npm run dev        # pages + relay on http://localhost:8787
 ```
 
 Open http://localhost:8787 in Chrome. The agent guide (Roman Urdu) is at `/guide.html`.
+The customer link only works on a phone once the project is deployed (see Deploy).
 
 ## Tests
 
@@ -62,7 +67,10 @@ specs/          spec, plan, research, data model, contracts, tasks (Spec-Driven 
 
 ## Known limits
 
-- Speech is sent to Google through Chrome to be turned into text.
-- Very fast English can lose some words (a limit of the speech service). Urdu is fine.
+- Speech is sent to Google through Chrome to be turned into text. Call audio is never recorded.
+- Very fast English (about 1.2× normal speed or faster) can lose words. This is the speech service:
+  it happens on every path, the microphone included. Urdu is fine.
+- Keep the page in its own window: captions keep running when it is hidden, but the agent can only
+  read them when it is visible.
 - Real-call checks on each call type are still pending before release
   (see `specs/001-live-call-text/quickstart.md`).

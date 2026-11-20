@@ -2,7 +2,8 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import {
   decideAgentUpgrade, decideViewerJoin, onAgentFrame, onAgentClose, parseUpgrade, CLOSE,
-  MAX_VIEWERS, MAX_FRAMES_PER_SEC,
+  MAX_VIEWERS, MAX_FRAMES_PER_SEC, FLOOD_FRAMES_PER_SEC, MAX_VIEWER_STRIKES,
+  isAgentLive, onViewerFrame, checkWsRequest,
 } from '../../relay/src/hub-logic.js';
 import { MAX_AGE_MS } from '../../web/js/core/link-session.js';
 import { buildCaption, buildEnd } from '../../web/js/core/protocol.js';
@@ -82,6 +83,55 @@ test('agent frames: more than 5 per second are dropped', () => {
 test('agent frames: end ends the call; anything after 4 h expires it', () => {
   assert.equal(onAgentFrame({ frame: buildEnd(), attachment: fresh(), now: V.created + 1000 }).end, true);
   assert.equal(onAgentFrame({ frame: caption(0), attachment: fresh(), now: V.created + MAX_AGE_MS + 1 }).expired, true);
+});
+
+// Review 2026-11-12 (B12): keep strangers from using up the relay's free allowance.
+test('a call is live only while its agent is not replaced, not ended and under 4 hours old', () => {
+  const now = V.created + 1000;
+  assert.equal(isAgentLive(fresh(), now), true);
+  assert.equal(isAgentLive(fresh(), V.created + MAX_AGE_MS), true);
+  assert.equal(isAgentLive(fresh(), V.created + MAX_AGE_MS + 1), false);   // FR-029: no new viewers after 4 h
+  assert.equal(isAgentLive({ ...fresh(), replaced: true }, now), false);
+  assert.equal(isAgentLive({ ...fresh(), ended: true }, now), false);
+  assert.equal(isAgentLive(null, now), false);
+  assert.equal(isAgentLive({ role: 'viewer', sid: V.sid }, now), false);
+});
+
+test('a viewer that sends anything is closed on the third frame', () => {
+  assert.equal(MAX_VIEWER_STRIKES, 3);
+  let r = onViewerFrame({ attachment: { role: 'viewer', sid: V.sid } });
+  assert.deepEqual([r.attachment.strikes, r.close], [1, undefined]);
+  r = onViewerFrame({ attachment: r.attachment });
+  assert.deepEqual([r.attachment.strikes, r.close], [2, undefined]);
+  r = onViewerFrame({ attachment: r.attachment });
+  assert.equal(r.close, CLOSE.BAD_FRAMES);
+});
+
+test('an agent socket that floods the relay is closed', () => {
+  assert.equal(FLOOD_FRAMES_PER_SEC, 50);
+  let a = fresh();
+  const now = V.created + 1000;
+  let last;
+  for (let i = 0; i <= FLOOD_FRAMES_PER_SEC; i++) {
+    last = onAgentFrame({ frame: caption(i), attachment: a, now: now + i });
+    a = last.attachment;
+    if (i < FLOOD_FRAMES_PER_SEC) assert.equal(last.close, undefined, `frame ${i + 1}`);
+  }
+  assert.equal(last.close, CLOSE.BAD_FRAMES);                                // the 51st frame in one second
+});
+
+test('requests are checked before the hub is woken: upgrade, role, sid and origin', () => {
+  const url = `https://lct.example/ws?role=viewer&sid=${V.sid}`;
+  const ok = { url, upgrade: 'websocket', origin: 'https://lct.example' };
+  assert.deepEqual(checkWsRequest(ok), { ok: true });
+  assert.deepEqual(checkWsRequest({ ...ok, upgrade: 'WebSocket' }), { ok: true });
+  assert.deepEqual(checkWsRequest({ ...ok, origin: null }), { ok: true });       // not a browser
+  assert.deepEqual(checkWsRequest({ ...ok, url: agentUrl(), origin: 'http://lct.example' }), { ok: true });
+  assert.equal(checkWsRequest({ ...ok, upgrade: null }).status, 426);
+  assert.equal(checkWsRequest({ ...ok, url: `https://lct.example/ws?role=boss&sid=${V.sid}` }).status, 400);
+  assert.equal(checkWsRequest({ ...ok, url: 'https://lct.example/ws?role=viewer&sid=short' }).status, 400);
+  assert.equal(checkWsRequest({ ...ok, origin: 'https://evil.example' }).status, 403);   // another website
+  assert.equal(checkWsRequest({ ...ok, origin: 'null' }).status, 403);                   // a sandboxed page
 });
 
 test('agent close: clean means ended, unclean means paused, replaced or ended is ignored', () => {

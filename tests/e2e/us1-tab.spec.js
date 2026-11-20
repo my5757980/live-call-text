@@ -51,6 +51,17 @@ test('Urdu customer speech appears as right-to-left Customer lines within 2 s', 
   const suppress = await agent.evaluate(
     () => window.__lct.state.capture.audioTrack.getSettings().suppressLocalAudioPlayback);
   expect(suppress).not.toBe(true);
+  // Finding 9: Chrome's own call processing drops pieces of the captured sound, which cuts
+  // English text mid-sentence. It must be switched off for the call audio.
+  const processing = await agent.evaluate(() => {
+    const s = window.__lct.state.capture.audioTrack.getSettings();
+    return [s.echoCancellation, s.noiseSuppression, s.autoGainControl];
+  });
+  expect(processing).toEqual([false, false, false]);
+  // Only the sound is used. The shared picture is slowed to about one frame a second,
+  // which saved roughly a third of Chrome's work in a measurement (test-log 2026-11-16).
+  await expect.poll(() => agent.evaluate(() => window.__lct.state.capture.videoTrack.getSettings().frameRate))
+    .toBeLessThanOrEqual(5);
 
   await expect(finalCustomer(agent).filter({ hasText: /کرولا|کراچی/ }).first()).toBeVisible({ timeout: 20_000 });
   await expect(customer(agent).first()).toHaveAttribute('dir', 'rtl');        // FR-014

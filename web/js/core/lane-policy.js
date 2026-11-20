@@ -7,14 +7,23 @@
 // Chrome fires `start` locally, before it reaches the speech service. So a pause is only
 // cleared by `healthy`, which the runner sends on the first result or after a session
 // has run 3 s without an error. While the browser is offline, nothing clears the pause.
+//
+// A session that ends normally (Chrome ends a quiet one after about 8 s) is replaced at
+// once, so no first word falls into a gap. A session that ends before it started, or
+// within a second with nothing heard ("quick"), did not work: those are retried more
+// slowly, and the third in a row pauses the lane with the speech-service message.
 
-export const RESTART_AFTER_END_MS = 250;
+export const RESTART_AFTER_END_MS = 0;
 export const HEALTHY_AFTER_MS = 3000;
+export const QUICK_END_MS = 1000;
+export const QUICK_ENDS_BEFORE_PAUSE = 3;
 export const RETRY_DELAYS_MS = Object.freeze([500, 1000, 2000, 3000]);
 
 export const retryDelay = (step) => RETRY_DELAYS_MS[Math.min(step, RETRY_DELAYS_MS.length - 1)];
 
-export const initialLane = (lang) => ({ state: 'idle', retryStep: 0, pauseReason: null, lang, offline: false });
+export const initialLane = (lang) => ({
+  state: 'idle', retryStep: 0, pauseReason: null, lang, offline: false, quickEnds: 0,
+});
 
 const PAUSE_MESSAGES = { 'no-internet': 'W_NO_INTERNET', 'speech-service': 'W_SPEECH_SERVICE' };
 
@@ -47,6 +56,29 @@ function onError(lane, event) {
   }
 }
 
+function onEnd(lane, event) {
+  if (lane.state === 'paused') {
+    return result(lane, { retryStep: lane.retryStep + 1 }, 'restart', retryDelay(lane.retryStep));
+  }
+  // The session never reached `start`: retry with the back-off steps.
+  if (lane.state === 'starting') {
+    const retryStep = lane.retryStep + 1;
+    const failed = retryStep >= QUICK_ENDS_BEFORE_PAUSE
+      ? { state: 'paused', pauseReason: 'speech-service' }
+      : {};
+    return result(lane, { ...failed, retryStep }, 'restart', retryDelay(lane.retryStep));
+  }
+  // The session started but ended at once with nothing heard.
+  if (event.quick) {
+    const quickEnds = (lane.quickEnds ?? 0) + 1;
+    const failed = quickEnds >= QUICK_ENDS_BEFORE_PAUSE
+      ? { state: 'paused', pauseReason: 'speech-service' }
+      : { state: 'starting' };
+    return result(lane, { ...failed, retryStep: quickEnds, quickEnds }, 'restart', retryDelay(quickEnds - 1));
+  }
+  return result(lane, { state: 'starting', retryStep: 0, quickEnds: 0 }, 'restart', RESTART_AFTER_END_MS);
+}
+
 export function decide(lane, event) {
   if (lane.state === 'stopped') return result(lane, {});
   switch (event.type) {
@@ -59,12 +91,9 @@ export function decide(lane, event) {
     case 'healthy':
       return lane.offline
         ? result(lane, {})
-        : result(lane, { state: 'listening', retryStep: 0, pauseReason: null });
+        : result(lane, { state: 'listening', retryStep: 0, pauseReason: null, quickEnds: 0 });
     case 'end':
-      if (lane.state === 'paused' || lane.state === 'starting') {
-        return result(lane, { retryStep: lane.retryStep + 1 }, 'restart', retryDelay(lane.retryStep));
-      }
-      return result(lane, { state: 'starting', retryStep: 0 }, 'restart', RESTART_AFTER_END_MS);
+      return onEnd(lane, event);
     case 'error':
       return onError(lane, event);
     case 'offline':

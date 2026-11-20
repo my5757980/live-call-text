@@ -5,7 +5,8 @@ import { DurableObject } from 'cloudflare:workers';
 import { isValidSid } from '../../web/js/core/link-session.js';
 import { buildStatus } from '../../web/js/core/protocol.js';
 import {
-  decideAgentUpgrade, decideViewerJoin, onAgentFrame, onAgentClose, parseUpgrade, CLOSE,
+  decideAgentUpgrade, decideViewerJoin, onAgentFrame, onViewerFrame, onAgentClose, isAgentLive,
+  parseUpgrade, CLOSE,
 } from './hub-logic.js';
 
 const OPEN = 1;
@@ -68,11 +69,11 @@ export class Hub extends DurableObject {
     return new Response(null, { status: 101, webSocket: client });
   }
 
+  // The call's current agent socket, if the call is live (not ended, under 4 hours old).
   liveAgent(sid) {
-    return this.ctx.getWebSockets(`agent:${sid}`).find((ws) => {
-      const a = ws.deserializeAttachment();
-      return a && !a.replaced && !a.ended && ws.readyState === OPEN;
-    });
+    const now = Date.now();
+    return this.ctx.getWebSockets(`agent:${sid}`)
+      .find((ws) => ws.readyState === OPEN && isAgentLive(ws.deserializeAttachment(), now));
   }
 
   broadcast(sid, frame) {
@@ -90,7 +91,13 @@ export class Hub extends DurableObject {
 
   async webSocketMessage(ws, message) {
     const a = ws.deserializeAttachment() ?? {};
-    if (a.role !== 'agent') return;   // viewers only ping (answered automatically)
+    if (a.role !== 'agent') {
+      // Viewers only listen; their ping is answered automatically and never gets here.
+      const v = onViewerFrame({ attachment: a });
+      ws.serializeAttachment(v.attachment);
+      if (v.close) safeClose(ws, v.close, 'viewers only listen');
+      return;
+    }
 
     const r = onAgentFrame({ frame: message, attachment: a, now: Date.now() });
     if (r.expired) {
@@ -106,7 +113,7 @@ export class Hub extends DurableObject {
       return;
     }
     ws.serializeAttachment(r.attachment);
-    if (r.close) safeClose(ws, r.close, 'too many invalid frames');
+    if (r.close) safeClose(ws, r.close, 'too many invalid or too many frames');
     else if (r.forward) this.broadcast(a.sid, r.forward);
   }
 

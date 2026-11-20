@@ -2,7 +2,15 @@
 
 export const DISPLAY_OPTIONS = Object.freeze({
   video: true,                                   // required by getDisplayMedia; never shown
-  audio: { suppressLocalAudioPlayback: false },  // the agent keeps hearing the call (FR-004)
+  audio: {
+    suppressLocalAudioPlayback: false,           // the agent keeps hearing the call (FR-004)
+    // Chrome's own call processing drops 10 ms pieces of the captured sound, which cuts
+    // English text mid-sentence (test-log Finding 9). The page evens out the level itself
+    // (core/agc.js), so the call audio is taken unprocessed.
+    echoCancellation: false,
+    noiseSuppression: false,
+    autoGainControl: false,
+  },
   systemAudio: 'include',                        // offer "Also share system audio" for screens
   windowAudio: 'window',                         // hint only; ignored where unsupported
   selfBrowserSurface: 'exclude',                 // our own tab is not offered
@@ -15,6 +23,10 @@ export async function startCallCapture(mediaDevices = navigator.mediaDevices) {
   const videoTrack = stream.getVideoTracks()[0] ?? null;
   const audioTrack = stream.getAudioTracks()[0] ?? null;
   const displaySurface = videoTrack?.getSettings?.().displaySurface ?? null;
+  // Only the sound is used. The picture keeps running (the sharing is tied to it), but at
+  // one frame a second instead of 30, which saved about a third of Chrome's work in a
+  // measurement (test-log 2026-11-16). Stopping it saved nothing.
+  videoTrack?.applyConstraints?.({ frameRate: 1 })?.catch?.(() => {});
   return { stream, audioTrack, videoTrack, displaySurface };
 }
 

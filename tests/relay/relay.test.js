@@ -4,6 +4,7 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawn, execSync } from 'node:child_process';
+import http from 'node:http';
 import { fileURLToPath } from 'node:url';
 import { createLinkSession } from '../../web/js/core/link-session.js';
 import { buildCaption, buildEnd } from '../../web/js/core/protocol.js';
@@ -167,4 +168,65 @@ test('ping is answered with pong', async () => {
   a.ws.send('ping');
   await waitFor(() => a.messages.includes('pong'));
   a.ws.close(1000);
+});
+
+// Review 2026-11-12 (B12). Node's WebSocket cannot choose its Origin header, so these send
+// the upgrade request by hand: 101 means the socket was accepted.
+function upgradeStatus(path, headers = {}) {
+  return new Promise((resolve, reject) => {
+    const req = http.request({
+      host: '127.0.0.1', port: PORT, path,
+      headers: {
+        Connection: 'Upgrade', Upgrade: 'websocket', 'Sec-WebSocket-Version': '13',
+        'Sec-WebSocket-Key': 'dGhlIHNhbXBsZSBub25jZQ==', ...headers,
+      },
+    });
+    req.on('response', (res) => { res.resume(); resolve(res.statusCode); });
+    req.on('upgrade', (res, socket) => { socket.destroy(); resolve(101); });
+    req.on('error', reject);
+    req.end();
+  });
+}
+
+test('another website cannot use the relay; this site and non-browser clients can', async () => {
+  const s = await newSession();
+  const path = `/ws?role=viewer&sid=${s.sid}`;
+  assert.equal(await upgradeStatus(path, { Origin: 'https://evil.example' }), 403);
+  assert.equal(await upgradeStatus(path, { Origin: 'null' }), 403);
+  assert.equal(await upgradeStatus(path, { Origin: `http://127.0.0.1:${PORT}` }), 101);
+  assert.equal(await upgradeStatus(path), 101);
+});
+
+test('requests that are not a proper socket request are refused', async () => {
+  const s = await newSession();
+  assert.equal((await fetch(`${HTTP}/ws?role=viewer&sid=${s.sid}`)).status, 426);
+  assert.equal(await upgradeStatus(`/ws?role=boss&sid=${s.sid}`), 400);
+  assert.equal(await upgradeStatus('/ws?role=viewer&sid=short'), 400);
+});
+
+test('a viewer that keeps sending is closed with 4008', async () => {
+  const s = await newSession();
+  const a = agent(s);
+  await a.opened;
+  await waitFor(() => hasStatus(a, 'live'));
+  const v = viewer(s.sid);
+  await waitFor(() => hasStatus(v, 'live'));
+  for (let i = 0; i < 3; i++) v.ws.send('let me talk');
+  const closed = await Promise.race([v.closed, sleep(20_000).then(() => ({ code: 'still open after 20 s' }))]);
+  assert.equal(closed.code, 4008);
+  a.ws.close(1000);
+});
+
+test('pages carry the security headers, and the headers file itself is not served', async () => {
+  for (const page of ['/', '/v.html', '/guide.html']) {
+    const r = await fetch(`${HTTP}${page}`);
+    assert.equal(r.status, 200, page);
+    const csp = r.headers.get('content-security-policy') ?? '';
+    for (const part of ["default-src 'none'", "script-src 'self'", "frame-ancestors 'none'"]) {
+      assert.ok(csp.includes(part), `${page}: CSP lacks ${part}: ${csp}`);
+    }
+    assert.equal(r.headers.get('x-content-type-options'), 'nosniff', page);
+    assert.equal(r.headers.get('referrer-policy'), 'no-referrer', page);
+  }
+  assert.equal((await fetch(`${HTTP}/_headers`)).status, 404);
 });
